@@ -1,0 +1,26 @@
+{
+  "name": "aetherium-browser-search",
+  "version": "1.0.0",
+  "description": "A browser search bar service that proxies to SearXNG and generates AI overviews via OpenAI-compatible LLMs",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && tsx scripts/bundle-lit.ts",
+    "start": "node dist/app.js",
+    "dev": "tsx watch src/app.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "@fastify/env": "^5.0.0",
+    "@fastify/static": "^8.0.0",
+    "dotenv": "^16.4.0",
+    "fastify": "^5.0.0",
+    "lit": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

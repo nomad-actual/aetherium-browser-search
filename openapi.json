@@ -1,0 +1,416 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Aetherium Browser Search",
+    "version": "1.0.0",
+    "description": "A browser search bar service that proxies to SearXNG and generates AI overviews via OpenAI-compatible LLMs.",
+    "contact": {
+      "name": "Aetherium Search"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/search": {
+      "get": {
+        "summary": "Search (GET)",
+        "description": "Performs a web search via SearXNG, optionally generates an AI overview via an LLM, and returns a fully rendered HTML page containing the `<search-results>` Lit web component.",
+        "operationId": "getSearch",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "The search query (URL-encoded)",
+            "example": "typescript tutorial"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["general", "images", "news", "video", "science", "it", "music", "files", "maps"],
+              "default": "general"
+            },
+            "description": "SearXNG search category"
+          },
+          {
+            "name": "engines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated list of SearXNG engine names (e.g., `google,duckduckgo`)"
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "BCP 47 language tag filter (e.g., `en`, `en-US`, `de`)"
+          },
+          {
+            "name": "pageno",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number for pagination (1-based)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML page with `<search-results>` Lit component",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>typescript tutorial - Aetherium Search</title><script type=\"module\" src=\"/static/search-results.js\"></script></head><body><search-results id=\"app\"></search-results><script>document.getElementById(\"app\").data = {\"query\":\"typescript tutorial\",\"results\":[],\"aiOverview\":null,\"aiOverviewError\":\"LLM_API_URL not configured\",\"categories\":[\"general\"]};</script></body></html>"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — missing query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Query parameter 'q' is required"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Search (POST)",
+        "description": "Same as GET /search but accepts search parameters in the request body as JSON.",
+        "operationId": "postSearch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["q"],
+                "properties": {
+                  "q": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The search query",
+                    "example": "capital of France"
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": ["general", "images", "news", "video", "science", "it", "music", "files", "maps"],
+                    "default": "general",
+                    "description": "SearXNG search category"
+                  },
+                  "engines": {
+                    "type": "string",
+                    "description": "Comma-separated engine names"
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "BCP 47 language tag"
+                  },
+                  "pageno": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 1,
+                    "description": "Page number (1-based)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "HTML page with `<search-results>` Lit component",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — missing query field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Query 'q' is required in request body"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config": {
+      "get": {
+        "summary": "Get Configuration",
+        "description": "Returns the current runtime configuration. Sensitive values (API keys) are returned as `null`.",
+        "operationId": "getConfig",
+        "responses": {
+          "200": {
+            "description": "Current configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                },
+                "example": {
+                  "searxngUrl": "http://searxng:8080",
+                  "llmApiUrl": "http://llamacpp:8081",
+                  "llmModel": "llama3.1-8b-instruct",
+                  "llmMaxTokens": 1024,
+                  "llmTemperature": 0.7,
+                  "aiOverviewPrompt": "Based on the following search results...",
+                  "llmApiKey": null,
+                  "searxngApiKey": null
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Update Configuration",
+        "description": "Validates configuration changes. **Changes are validated but do not take effect until the service is restarted.**",
+        "operationId": "updateConfig",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "searxngUrl": {
+                    "type": "string",
+                    "description": "New SearXNG base URL"
+                  },
+                  "llmApiUrl": {
+                    "type": "string",
+                    "description": "New LLM API base URL"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Config validated successfully (restart required)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigUpdateResult"
+                },
+                "example": {
+                  "success": true,
+                  "message": "Config updated. Restart required for changes to take effect."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigUpdateResult"
+                },
+                "example": {
+                  "success": false,
+                  "message": "llmApiUrl must be a string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Returns the service health status. Used by load balancers, container orchestrators, and monitoring systems.",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                },
+                "example": {
+                  "status": "ok",
+                  "timestamp": "2025-01-15T12:00:00.000Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          }
+        },
+        "required": ["error"]
+      },
+      "HealthStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"],
+            "description": "Health status"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": ["status", "timestamp"]
+      },
+      "Config": {
+        "type": "object",
+        "properties": {
+          "searxngUrl": {
+            "type": "string",
+            "description": "SearXNG instance base URL"
+          },
+          "llmApiUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "LLM API base URL (null if not configured)"
+          },
+          "llmModel": {
+            "type": "string",
+            "description": "Model name for the LLM"
+          },
+          "llmMaxTokens": {
+            "type": "integer",
+            "description": "Maximum tokens for LLM responses"
+          },
+          "llmTemperature": {
+            "type": "number",
+            "description": "LLM temperature (0–1)"
+          },
+          "aiOverviewPrompt": {
+            "type": "string",
+            "description": "Custom AI overview prompt template"
+          },
+          "llmApiKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Redacted (always null)"
+          },
+          "searxngApiKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "Redacted (always null)"
+          }
+        },
+        "required": [
+          "searxngUrl",
+          "llmApiUrl",
+          "llmModel",
+          "llmMaxTokens",
+          "llmTemperature",
+          "aiOverviewPrompt",
+          "llmApiKey",
+          "searxngApiKey"
+        ]
+      },
+      "ConfigUpdateResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["success", "message"]
+      },
+      "SearXNGResult": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "img_src": {
+            "type": "string",
+            "nullable": true
+          },
+          "engine": {
+            "type": "string"
+          },
+          "engines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parsed_url": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "score": {
+            "type": "number",
+            "nullable": true
+          },
+          "category": {
+            "type": "string"
+          }
+        },
+        "required": ["title", "url", "content", "engine", "engines", "category"]
+      }
+    }
+  }
+}
