@@ -192,16 +192,6 @@ body {
   border-color: var(--primary);
 }
 
-.dropdown-item[data-theme="dark"] { background: #0d1117; border: 1px solid #30363d; }
-.dropdown-item[data-theme="light"] { background: #ffffff; border: 1px solid #d0d7de; }
-.dropdown-item[data-theme="slate"] { background: #0f172a; border: 1px solid #334155; }
-.dropdown-item[data-theme="ocean"] { background: #0a192f; border: 1px solid #233554; }
-.dropdown-item[data-theme="nord"] { background: #2e3440; border: 1px solid #434c5e; }
-.dropdown-item[data-theme="dracula"] { background: #282a36; border: 1px solid #6272a4; }
-.dropdown-item[data-theme="monokai"] { background: #272822; border: 1px solid #575646; }
-.dropdown-item[data-theme="solarized"] { background: #002b36; border: 1px solid #586e75; }
-.dropdown-item[data-theme="catppuccin"] { background: #1e1e2e; border: 1px solid #45475a; }
-.dropdown-item[data-theme="rosepine"] { background: #191724; border: 1px solid #393552; }
 .dropdown-item[data-theme="gruvbox"] { background: #282828; border: 1px solid #504945; }
 .dropdown-item[data-theme="tokyonight"] { background: #1a1b26; border: 1px solid #414868; }
 
@@ -645,96 +635,6 @@ function markdownToHtml(md: string): string {
 }
 
 const THEMES = {
-  dark: {
-    background: "#0d1117", surface: "#161b22", surfaceBorder: "#30363d",
-    text: "#c9d1d9", textSecondary: "#8b949e", textMuted: "#484f58",
-    primary: "#58a6ff", primaryHover: "#79b8ff", accent: "#3fb950",
-    error: "#f85149", errorBg: "#f8514914", inputBg: "#0d1117",
-    inputBorder: "#30363d", inputFocus: "#58a6ff", tagBg: "#21262d",
-    tagText: "#484f58", link: "#58a6ff", divider: "#21262d",
-    placeholder: "#484f58", shadow: "#01040940"
-  },
-  light: {
-    background: "#ffffff", surface: "#f6f8fa", surfaceBorder: "#d0d7de",
-    text: "#1f2328", textSecondary: "#656d76", textMuted: "#8c959f",
-    primary: "#0969da", primaryHover: "#0550ae", accent: "#1a7f37",
-    error: "#cf222e", errorBg: "#ffccd5", inputBg: "#ffffff",
-    inputBorder: "#d0d7de", inputFocus: "#0969da", tagBg: "#eff1f3",
-    tagText: "#656d76", link: "#0969da", divider: "#d0d7de",
-    placeholder: "#8c959f", shadow: "#0104091a"
-  },
-  slate: {
-    background: "#0f172a", surface: "#1e293b", surfaceBorder: "#334155",
-    text: "#e2e8f0", textSecondary: "#94a3b8", textMuted: "#475569",
-    primary: "#818cf8", primaryHover: "#a5b4fc", accent: "#34d399",
-    error: "#f87171", errorBg: "#f8717120", inputBg: "#0f172a",
-    inputBorder: "#334155", inputFocus: "#818cf8", tagBg: "#1e293b",
-    tagText: "#64748b", link: "#818cf8", divider: "#1e293b",
-    placeholder: "#475569", shadow: "#00000050"
-  },
-  ocean: {
-    background: "#0a192f", surface: "#112240", surfaceBorder: "#233554",
-    text: "#ccd6f6", textSecondary: "#8892b0", textMuted: "#495670",
-    primary: "#64ffda", primaryHover: "#80ffeb", accent: "#64ffda",
-    error: "#ff6b6b", errorBg: "#ff6b6b20", inputBg: "#0a192f",
-    inputBorder: "#233554", inputFocus: "#64ffda", tagBg: "#112240",
-    tagText: "#495670", link: "#64ffda", divider: "#112240",
-    placeholder: "#495670", shadow: "#00000060"
-  },
-  nord: {
-    background: "#2e3440", surface: "#3b4252", surfaceBorder: "#434c5e",
-    text: "#eceff4", textSecondary: "#d8dee9", textMuted: "#4c566a",
-    primary: "#88c0d0", primaryHover: "#8fbcbb", accent: "#a3be8c",
-    error: "#bf616a", errorBg: "#bf616a20", inputBg: "#2e3440",
-    inputBorder: "#434c5e", inputFocus: "#88c0d0", tagBg: "#3b4252",
-    tagText: "#4c566a", link: "#88c0d0", divider: "#3b4252",
-    placeholder: "#4c566a", shadow: "#00000040"
-  },
-  dracula: {
-    background: "#282a36", surface: "#343746", surfaceBorder: "#6272a4",
-    text: "#f8f8f2", textSecondary: "#bd98f6", textMuted: "#6272a4",
-    primary: "#bd93f9", primaryHover: "#d6acff", accent: "#50fa7b",
-    error: "#ff5555", errorBg: "#ff555520", inputBg: "#282a36",
-    inputBorder: "#6272a4", inputFocus: "#bd93f9", tagBg: "#343746",
-    tagText: "#6272a4", link: "#bd93f9", divider: "#343746",
-    placeholder: "#6272a4", shadow: "#00000050"
-  },
-  monokai: {
-    background: "#272822", surface: "#3e3d32", surfaceBorder: "#575646",
-    text: "#f8f8f2", textSecondary: "#75715e", textMuted: "#575646",
-    primary: "#a6e22e", primaryHover: "#b2e84a", accent: "#66d9ef",
-    error: "#f92672", errorBg: "#f9267220", inputBg: "#272822",
-    inputBorder: "#575646", inputFocus: "#a6e22e", tagBg: "#3e3d32",
-    tagText: "#75715e", link: "#a6e22e", divider: "#3e3d32",
-    placeholder: "#575646", shadow: "#00000050"
-  },
-  solarized: {
-    background: "#002b36", surface: "#073642", surfaceBorder: "#586e75",
-    text: "#839496", textSecondary: "#93a1a1", textMuted: "#586e75",
-    primary: "#268bd2", primaryHover: "#859900", accent: "#2aa198",
-    error: "#dc322f", errorBg: "#dc322f20", inputBg: "#002b36",
-    inputBorder: "#586e75", inputFocus: "#268bd2", tagBg: "#073642",
-    tagText: "#586e75", link: "#268bd2", divider: "#073642",
-    placeholder: "#586e75", shadow: "#00000060"
-  },
-  catppuccin: {
-    background: "#1e1e2e", surface: "#313244", surfaceBorder: "#45475a",
-    text: "#cdd6f4", textSecondary: "#a6adc8", textMuted: "#585b70",
-    primary: "#89b4fa", primaryHover: "#b4befe", accent: "#a6e3a1",
-    error: "#f38ba8", errorBg: "#f38ba820", inputBg: "#1e1e2e",
-    inputBorder: "#45475a", inputFocus: "#89b4fa", tagBg: "#313244",
-    tagText: "#585b70", link: "#89b4fa", divider: "#313244",
-    placeholder: "#585b70", shadow: "#00000040"
-  },
-  rosepine: {
-    background: "#191724", surface: "#26203a", surfaceBorder: "#393552",
-    text: "#e0def4", textSecondary: "#908caa", textMuted: "#6e6a86",
-    primary: "#c4a7e7", primaryHover: "#d4b9f6", accent: "#eb6f92",
-    error: "#eb6f92", errorBg: "#eb6f9220", inputBg: "#191724",
-    inputBorder: "#393552", inputFocus: "#c4a7e7", tagBg: "#26203a",
-    tagText: "#6e6a86", link: "#c4a7e7", divider: "#26203a",
-    placeholder: "#6e6a86", shadow: "#00000050"
-  },
   gruvbox: {
     background: "#282828", surface: "#3c3836", surfaceBorder: "#504945",
     text: "#ebdbb2", textSecondary: "#a89984", textMuted: "#504945",
@@ -755,7 +655,7 @@ const THEMES = {
   }
 };
 
-function applyThemeCSSVars(colors: typeof THEMES.dark): string {
+function applyThemeCSSVars(colors: typeof THEMES.gruvbox): string {
   return [
     `--bg: ${colors.background}`,
     `--surface: ${colors.surface}`,
@@ -851,8 +751,8 @@ function createHtmlShell(
   style?: "clean" | "bold",
   theme?: string
 ): string {
-  const effectiveTheme = theme || "dark";
-  const themeColors = (THEMES as Record<string, typeof THEMES.dark>)[effectiveTheme] || THEMES.dark;
+  const effectiveTheme = theme || "gruvbox";
+  const themeColors = (THEMES as Record<string, typeof THEMES.gruvbox>)[effectiveTheme] || THEMES.gruvbox;
   const themeVars = applyThemeCSSVars(themeColors);
   const effectiveStyle = style || "clean";
 
