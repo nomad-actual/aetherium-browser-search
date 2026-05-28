@@ -166,10 +166,13 @@ body {
   border: 1px solid var(--surface-border);
   border-radius: 8px;
   padding: 6px;
-  display: flex;
+  display: none;
   gap: 4px;
   box-shadow: 0 4px 16px var(--shadow);
   z-index: 200;
+}
+.dropdown.open {
+  display: flex;
 }
 
 .dropdown-item {
