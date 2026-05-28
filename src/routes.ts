@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import Fastify, { FastifyInstance } from "fastify";
 import { SearchResult, SearXNGResponse, SearXNGResult } from "./types.js";
 import { AppConfig } from "./config.js";
@@ -79,29 +80,47 @@ function createHtmlShell(
   var params = ${JSON.stringify(searchParams)};
   var url = "/search/stream?q=" + encodeURIComponent(q);
   if (params) { url += "&" + params; }
-  var source = new EventSource(url);
-  source.addEventListener("overview", function(e) {
-    try {
-      var data = JSON.parse(e.data);
-      var app = document.getElementById("app");
-      if (app) {
-        app.data = { ...app.data, aiOverview: data.overview, aiOverviewLoading: false };
-      }
-    } catch(err) {
-      var app = document.getElementById("app");
-      if (app) {
-        app.data = { ...app.data, aiOverviewError: "Failed to load AI overview", aiOverviewLoading: false };
-      }
-    }
-    source.close();
-  });
-  source.addEventListener("error", function() {
+  var setupSSE = function() {
     var app = document.getElementById("app");
-    if (app) {
-      app.data = { ...app.data, aiOverviewError: "AI overview unavailable", aiOverviewLoading: false };
-    }
-    source.close();
-  });
+    if (!app) { return; }
+    var source = new EventSource(url);
+    source.addEventListener("open", function() { console.log("SSE connected"); });
+    source.addEventListener("overview", function(e) {
+      try {
+        var overviewData = JSON.parse(e.data);
+        var app = document.getElementById("app");
+        if (app && app.data) {
+          var newData = Object.assign({}, app.data, { aiOverview: overviewData.overview, aiOverviewLoading: false });
+          app.data = newData;
+          console.log("SSE overview received, aiOverview:", typeof overviewData.overview);
+        } else {
+          console.error("SSE: app or app.data not found");
+        }
+      } catch(err) {
+        console.error("SSE parse error:", err);
+        var app = document.getElementById("app");
+        if (app) {
+          var errData = Object.assign({}, app.data, { aiOverviewError: "Failed to load AI overview", aiOverviewLoading: false });
+          app.data = errData;
+        }
+      }
+      source.close();
+    });
+    source.addEventListener("error", function(e) {
+      console.error("SSE error:", e);
+      var app = document.getElementById("app");
+      if (app) {
+        var errData = Object.assign({}, app.data, { aiOverviewError: "AI overview unavailable", aiOverviewLoading: false });
+        app.data = errData;
+      }
+      source.close();
+    });
+  };
+  if (customElements.get("search-results")) {
+    setupSSE();
+  } else {
+    customElements.whenDefined("search-results").then(setupSSE);
+  }
 })();
 </script>`
     : "";
@@ -117,7 +136,9 @@ function createHtmlShell(
 <body>
   <search-results id="app"></search-results>
   <script>
-    document.getElementById("app").data = ${initData};
+    var initData = ${initData};
+    document.getElementById("app").data = initData;
+    console.log("Initial data set, aiOverviewLoading:", initData.aiOverviewLoading);
   </script>
   ${sseScript}
 </body>
@@ -189,23 +210,32 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig) {
     reply.header("Content-Type", "text/event-stream");
     reply.header("Cache-Control", "no-cache");
     reply.header("Connection", "keep-alive");
+    reply.header("X-Accel-Buffering", "no");
+    reply.header("Access-Control-Allow-Origin", "*");
 
-    try {
-      const { results } = await fetchResults(config, q.trim(), { category, engines, language, pageno });
+    const stream = new Readable({
+      async read() {
+        try {
+          const { results } = await fetchResults(config, q.trim(), { category, engines, language, pageno });
 
-      if (!config.llmApiUrl || !results.length) {
-        reply.raw.write(`event: error\ndata: {}\n\n`);
-        reply.raw.end();
-        return;
+          if (!config.llmApiUrl || !results.length) {
+            this.push(`event: error\ndata: {}\n\n`);
+            this.push(null);
+            return;
+          }
+
+          const ai = await getAIOverview(config, q.trim(), results);
+          this.push(`event: overview\ndata: ${JSON.stringify({ overview: ai.overview })}\n\n`);
+          this.push(null);
+        } catch (err: any) {
+          console.error("SSE stream error:", err);
+          this.push(`event: error\ndata: {}\n\n`);
+          this.push(null);
+        }
       }
+    });
 
-      const ai = await getAIOverview(config, q.trim(), results);
-      reply.raw.write(`event: overview\ndata: ${JSON.stringify({ overview: ai.overview })}\n\n`);
-    } catch (err: any) {
-      reply.raw.write(`event: error\ndata: {}\n\n`);
-    }
-
-    reply.raw.end();
+    return reply.send(stream);
   });
 
   app.get("/config", async (request, reply) => {

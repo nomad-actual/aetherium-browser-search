@@ -167,9 +167,6 @@ export class SearchResults extends LitElement {
   @property({ type: String })
   themeMode: ThemeMode = "dark";
 
-  @property({ type: Boolean })
-  aiOverviewLoading: boolean = false;
-
   @state()
   private showThemePicker: boolean = false;
 
@@ -498,7 +495,7 @@ export class SearchResults extends LitElement {
   `;
 
   render() {
-    const { query, results, aiOverview, aiOverviewError } = this.data;
+    const { query, results, aiOverview, aiOverviewError, aiOverviewLoading } = this.data;
 
     return html`
       <header class="header">
@@ -540,7 +537,7 @@ export class SearchResults extends LitElement {
       </header>
 
       <main class="content">
-        ${this.aiOverviewLoading && !aiOverview && !aiOverviewError
+        ${aiOverviewLoading && !aiOverview && !aiOverviewError
         ? html`
             <section class="ai-overview">
               <div class="ai-overview-label">Generating AI Overview</div>
