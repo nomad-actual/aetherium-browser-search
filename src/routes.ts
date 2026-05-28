@@ -966,7 +966,7 @@ function createHtmlShell(
         var overviewData = JSON.parse(e.data);
         if (sidebarAnswer) {
           sidebarAnswer.className = "sidebar-answer";
-          sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview</div><div class="sidebar-answer">' + markdownToHtml(overviewData.overview) + '</div>';
+          sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview</div>' + markdownToHtml(overviewData.overview);
         }
         if (thinkingBlock) {
           var toggle = thinkingBlock.querySelector(".thinking-toggle");
@@ -1224,7 +1224,7 @@ function createHtmlShell(
                </div>`
 : aiOverview
                ? `<div class="ai-overview-label">AI Overview</div>
-                  <div class="sidebar-answer">${markdownToHtml(aiOverview)}</div>`
+                  ${markdownToHtml(aiOverview)}`
                : aiOverviewError
                  ? `<div class="ai-overview-label">AI Overview unavailable</div>
                     <p>${escapeHtml(aiOverviewError)}</p>`
