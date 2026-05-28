@@ -37,7 +37,8 @@ export async function getAIOverview(
     headers["Authorization"] = `Bearer ${config.llmApiKey}`;
   }
 
-  const response = await fetch(`${config.llmApiUrl}/v1/chat/completions`, {
+  const apiUrl = config.llmApiUrl.replace(/\/v1\/?$/, "").replace(/\/$/, "");
+  const response = await fetch(`${apiUrl}/v1/chat/completions`, {
     method: "POST",
     headers,
     body,
@@ -51,8 +52,12 @@ export async function getAIOverview(
 
   const data = await response.json();
 
+  const message = data.choices?.[0]?.message;
+  const content = message?.reasoning_content || message?.content || "";
+  const overview = content || "No overview generated";
+
   return {
-    overview: data.choices?.[0]?.message?.content || "No overview generated",
+    overview,
     model: data.model,
     usage: data.usage
   };
