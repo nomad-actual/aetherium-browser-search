@@ -193,6 +193,14 @@ body {
 .dropdown-item[data-theme="light"] { background: #ffffff; border: 1px solid #d0d7de; }
 .dropdown-item[data-theme="slate"] { background: #0f172a; border: 1px solid #334155; }
 .dropdown-item[data-theme="ocean"] { background: #0a192f; border: 1px solid #233554; }
+.dropdown-item[data-theme="nord"] { background: #2e3440; border: 1px solid #434c5e; }
+.dropdown-item[data-theme="dracula"] { background: #282a36; border: 1px solid #6272a4; }
+.dropdown-item[data-theme="monokai"] { background: #272822; border: 1px solid #575646; }
+.dropdown-item[data-theme="solarized"] { background: #002b36; border: 1px solid #586e75; }
+.dropdown-item[data-theme="catppuccin"] { background: #1e1e2e; border: 1px solid #45475a; }
+.dropdown-item[data-theme="rosepine"] { background: #191724; border: 1px solid #393552; }
+.dropdown-item[data-theme="gruvbox"] { background: #282828; border: 1px solid #504945; }
+.dropdown-item[data-theme="tokyonight"] { background: #1a1b26; border: 1px solid #414868; }
 
 .style-dropdown {
   flex-direction: column;
@@ -669,6 +677,78 @@ const THEMES = {
     inputBorder: "#233554", inputFocus: "#64ffda", tagBg: "#112240",
     tagText: "#495670", link: "#64ffda", divider: "#112240",
     placeholder: "#495670", shadow: "#00000060"
+  },
+  nord: {
+    background: "#2e3440", surface: "#3b4252", surfaceBorder: "#434c5e",
+    text: "#eceff4", textSecondary: "#d8dee9", textMuted: "#4c566a",
+    primary: "#88c0d0", primaryHover: "#8fbcbb", accent: "#a3be8c",
+    error: "#bf616a", errorBg: "#bf616a20", inputBg: "#2e3440",
+    inputBorder: "#434c5e", inputFocus: "#88c0d0", tagBg: "#3b4252",
+    tagText: "#4c566a", link: "#88c0d0", divider: "#3b4252",
+    placeholder: "#4c566a", shadow: "#00000040"
+  },
+  dracula: {
+    background: "#282a36", surface: "#343746", surfaceBorder: "#6272a4",
+    text: "#f8f8f2", textSecondary: "#bd98f6", textMuted: "#6272a4",
+    primary: "#bd93f9", primaryHover: "#d6acff", accent: "#50fa7b",
+    error: "#ff5555", errorBg: "#ff555520", inputBg: "#282a36",
+    inputBorder: "#6272a4", inputFocus: "#bd93f9", tagBg: "#343746",
+    tagText: "#6272a4", link: "#bd93f9", divider: "#343746",
+    placeholder: "#6272a4", shadow: "#00000050"
+  },
+  monokai: {
+    background: "#272822", surface: "#3e3d32", surfaceBorder: "#575646",
+    text: "#f8f8f2", textSecondary: "#75715e", textMuted: "#575646",
+    primary: "#a6e22e", primaryHover: "#b2e84a", accent: "#66d9ef",
+    error: "#f92672", errorBg: "#f9267220", inputBg: "#272822",
+    inputBorder: "#575646", inputFocus: "#a6e22e", tagBg: "#3e3d32",
+    tagText: "#75715e", link: "#a6e22e", divider: "#3e3d32",
+    placeholder: "#575646", shadow: "#00000050"
+  },
+  solarized: {
+    background: "#002b36", surface: "#073642", surfaceBorder: "#586e75",
+    text: "#839496", textSecondary: "#93a1a1", textMuted: "#586e75",
+    primary: "#268bd2", primaryHover: "#859900", accent: "#2aa198",
+    error: "#dc322f", errorBg: "#dc322f20", inputBg: "#002b36",
+    inputBorder: "#586e75", inputFocus: "#268bd2", tagBg: "#073642",
+    tagText: "#586e75", link: "#268bd2", divider: "#073642",
+    placeholder: "#586e75", shadow: "#00000060"
+  },
+  catppuccin: {
+    background: "#1e1e2e", surface: "#313244", surfaceBorder: "#45475a",
+    text: "#cdd6f4", textSecondary: "#a6adc8", textMuted: "#585b70",
+    primary: "#89b4fa", primaryHover: "#b4befe", accent: "#a6e3a1",
+    error: "#f38ba8", errorBg: "#f38ba820", inputBg: "#1e1e2e",
+    inputBorder: "#45475a", inputFocus: "#89b4fa", tagBg: "#313244",
+    tagText: "#585b70", link: "#89b4fa", divider: "#313244",
+    placeholder: "#585b70", shadow: "#00000040"
+  },
+  rosepine: {
+    background: "#191724", surface: "#26203a", surfaceBorder: "#393552",
+    text: "#e0def4", textSecondary: "#908caa", textMuted: "#6e6a86",
+    primary: "#c4a7e7", primaryHover: "#d4b9f6", accent: "#eb6f92",
+    error: "#eb6f92", errorBg: "#eb6f9220", inputBg: "#191724",
+    inputBorder: "#393552", inputFocus: "#c4a7e7", tagBg: "#26203a",
+    tagText: "#6e6a86", link: "#c4a7e7", divider: "#26203a",
+    placeholder: "#6e6a86", shadow: "#00000050"
+  },
+  gruvbox: {
+    background: "#282828", surface: "#3c3836", surfaceBorder: "#504945",
+    text: "#ebdbb2", textSecondary: "#a89984", textMuted: "#504945",
+    primary: "#fabd2f", primaryHover: "#f2cc6f", accent: "#b8bb26",
+    error: "#fb4934", errorBg: "#fb493420", inputBg: "#282828",
+    inputBorder: "#504945", inputFocus: "#fabd2f", tagBg: "#3c3836",
+    tagText: "#504945", link: "#fabd2f", divider: "#3c3836",
+    placeholder: "#504945", shadow: "#00000050"
+  },
+  tokyonight: {
+    background: "#1a1b26", surface: "#24283b", surfaceBorder: "#414868",
+    text: "#c0caf5", textSecondary: "#a9b1d6", textMuted: "#414868",
+    primary: "#7aa2f7", primaryHover: "#9aa5e1", accent: "#9ece6a",
+    error: "#f7768e", errorBg: "#f7768e20", inputBg: "#1a1b26",
+    inputBorder: "#414868", inputFocus: "#7aa2f7", tagBg: "#24283b",
+    tagText: "#414868", link: "#7aa2f7", divider: "#24283b",
+    placeholder: "#414868", shadow: "#00000045"
   }
 };
 
@@ -998,28 +1078,48 @@ function createHtmlShell(
         applyStyle(storedStyle);
 
         document.querySelectorAll(".theme-toggle").forEach(function(btn) {
-          btn.addEventListener("click", function() {
-            document.getElementById("theme-dropdown").classList.toggle("open");
+          btn.addEventListener("click", function(e) {
+            var dd = document.getElementById("theme-dropdown");
+            if (dd) {
+              if (dd.classList.contains("open")) {
+                dd.classList.remove("open");
+              } else {
+                document.querySelectorAll(".dropdown").forEach(function(d) { d.classList.remove("open"); });
+                dd.classList.add("open");
+              }
+            }
+            e.stopPropagation();
           });
         });
 
         document.querySelectorAll(".style-toggle").forEach(function(btn) {
-          btn.addEventListener("click", function() {
-            document.getElementById("style-dropdown").classList.toggle("open");
+          btn.addEventListener("click", function(e) {
+            var dd = document.getElementById("style-dropdown");
+            if (dd) {
+              if (dd.classList.contains("open")) {
+                dd.classList.remove("open");
+              } else {
+                document.querySelectorAll(".dropdown").forEach(function(d) { d.classList.remove("open"); });
+                dd.classList.add("open");
+              }
+            }
+            e.stopPropagation();
           });
         });
 
         document.querySelectorAll(".dropdown-item").forEach(function(item) {
-          item.addEventListener("click", function() {
+          item.addEventListener("click", function(e) {
             applyTheme(item.getAttribute("data-theme"));
             document.getElementById("theme-dropdown").classList.remove("open");
+            e.stopPropagation();
           });
         });
 
         document.querySelectorAll(".style-option").forEach(function(opt) {
-          opt.addEventListener("click", function() {
+          opt.addEventListener("click", function(e) {
             applyStyle(opt.getAttribute("data-style"));
             document.getElementById("style-dropdown").classList.remove("open");
+            e.stopPropagation();
           });
         });
 
