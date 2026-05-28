@@ -72,20 +72,23 @@ function createHtmlShell(
     aiOverviewLoading
   });
 
-  const sseScript = aiOverviewLoading && searchParams
+  const sseScript = aiOverviewLoading
     ? `<script>
 (function() {
-  const params = ${JSON.stringify(searchParams)};
-  const source = new EventSource("/search/stream?" + params);
+  var q = ${JSON.stringify(q)};
+  var params = ${JSON.stringify(searchParams)};
+  var url = "/search/stream?q=" + encodeURIComponent(q);
+  if (params) { url += "&" + params; }
+  var source = new EventSource(url);
   source.addEventListener("overview", function(e) {
     try {
-      const data = JSON.parse(e.data);
-      const app = document.getElementById("app");
+      var data = JSON.parse(e.data);
+      var app = document.getElementById("app");
       if (app) {
         app.data = { ...app.data, aiOverview: data.overview, aiOverviewLoading: false };
       }
     } catch(err) {
-      const app = document.getElementById("app");
+      var app = document.getElementById("app");
       if (app) {
         app.data = { ...app.data, aiOverviewError: "Failed to load AI overview", aiOverviewLoading: false };
       }
@@ -93,7 +96,7 @@ function createHtmlShell(
     source.close();
   });
   source.addEventListener("error", function() {
-    const app = document.getElementById("app");
+    var app = document.getElementById("app");
     if (app) {
       app.data = { ...app.data, aiOverviewError: "AI overview unavailable", aiOverviewLoading: false };
     }
