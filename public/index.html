@@ -4,9 +4,269 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aetherium Search</title>
-  <script type="module" src="/static/search-results.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-border: #30363d;
+      --text: #c9d1d9;
+      --text-secondary: #8b949e;
+      --text-muted: #484f58;
+      --primary: #58a6ff;
+      --primary-hover: #79b8ff;
+      --accent: #3fb950;
+      --error: #f85149;
+      --error-bg: #f8514914;
+      --input-bg: #0d1117;
+      --input-border: #30363d;
+      --input-focus: #58a6ff;
+      --tag-bg: #21262d;
+      --tag-text: #484f58;
+      --link: #58a6ff;
+      --divider: #21262d;
+      --placeholder: #484f58;
+      --shadow: #01040940;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .home {
+      text-align: center;
+      max-width: 560px;
+    }
+
+    .home h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+
+    .home h1 span {
+      color: var(--primary);
+    }
+
+    .home form {
+      position: relative;
+    }
+
+    .home input {
+      width: 100%;
+      padding: 14px 48px 14px 18px;
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      background: var(--input-bg);
+      color: var(--text);
+      font-size: 16px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .home input:focus {
+      border-color: var(--input-focus);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--input-focus) 15%, transparent);
+    }
+
+    .home input::placeholder {
+      color: var(--placeholder);
+    }
+
+    .home button {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .home button:hover {
+      color: var(--text);
+      background: var(--surface-border);
+    }
+
+    .theme-toggle {
+      margin-top: 24px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: 1px solid var(--surface-border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+    }
+
+    .theme-toggle:hover {
+      color: var(--text-secondary);
+    }
+
+    .theme-dropdown {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 8px;
+      display: none;
+      gap: 8px;
+      box-shadow: 0 4px 16px var(--shadow);
+    }
+
+    .theme-dropdown.open {
+      display: flex;
+    }
+
+    .theme-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+
+    .theme-dot:hover { transform: scale(1.15); }
+    .theme-dot.active { border-color: var(--primary); }
+    .theme-dot[data-theme="dark"] { background: #0d1117; border: 1px solid #30363d; }
+    .theme-dot[data-theme="light"] { background: #ffffff; border: 1px solid #d0d7de; }
+    .theme-dot[data-theme="slate"] { background: #0f172a; border: 1px solid #334155; }
+    .theme-dot[data-theme="ocean"] { background: #0a192f; border: 1px solid #233554; }
+  </style>
+  <script>
+    (function() {
+      var themes = {
+        dark: { background: "#0d1117", surface: "#161b22", surfaceBorder: "#30363d", text: "#c9d1d9", textSecondary: "#8b949e", textMuted: "#484f58", primary: "#58a6ff", primaryHover: "#79b8ff", accent: "#3fb950", error: "#f85149", errorBg: "#f8514914", inputBg: "#0d1117", inputBorder: "#30363d", inputFocus: "#58a6ff", tagBg: "#21262d", tagText: "#484f58", link: "#58a6ff", divider: "#21262d", placeholder: "#484f58", shadow: "#01040940" },
+        light: { background: "#ffffff", surface: "#f6f8fa", surfaceBorder: "#d0d7de", text: "#1f2328", textSecondary: "#656d76", textMuted: "#8c959f", primary: "#0969da", primaryHover: "#0550ae", accent: "#1a7f37", error: "#cf222e", errorBg: "#ffccd5", inputBg: "#ffffff", inputBorder: "#d0d7de", inputFocus: "#0969da", tagBg: "#eff1f3", tagText: "#656d76", link: "#0969da", divider: "#d0d7de", placeholder: "#8c959f", shadow: "#0104091a" },
+        slate: { background: "#0f172a", surface: "#1e293b", surfaceBorder: "#334155", text: "#e2e8f0", textSecondary: "#94a3b8", textMuted: "#475569", primary: "#818cf8", primaryHover: "#a5b4fc", accent: "#34d399", error: "#f87171", errorBg: "#f8717120", inputBg: "#0f172a", inputBorder: "#334155", inputFocus: "#818cf8", tagBg: "#1e293b", tagText: "#64748b", link: "#818cf8", divider: "#1e293b", placeholder: "#475569", shadow: "#00000050" },
+        ocean: { background: "#0a192f", surface: "#112240", surfaceBorder: "#233554", text: "#ccd6f6", textSecondary: "#8892b0", textMuted: "#495670", primary: "#64ffda", primaryHover: "#80ffeb", accent: "#64ffda", error: "#ff6b6b", errorBg: "#ff6b6b20", inputBg: "#0a192f", inputBorder: "#233554", inputFocus: "#64ffda", tagBg: "#112240", tagText: "#495670", link: "#64ffda", divider: "#112240", placeholder: "#495670", shadow: "#00000060" }
+      };
+
+      function getCookie(name) {
+        var cookies = document.cookie.split("; ");
+        for (var c of cookies) {
+          var parts = c.split("=");
+          var key = parts[0];
+          var val = parts.slice(1).join("=");
+          if (key === name) return val;
+        }
+        return null;
+      }
+
+      function setCookie(name, value) {
+        document.cookie = name + "=" + value + "; path=/; max-age=31536000";
+      }
+
+      function applyTheme(name) {
+        var colors = themes[name] || themes.dark;
+        var vars = [
+          "--bg: "+colors.background,
+          "--surface: "+colors.surface,
+          "--surface-border: "+colors.surfaceBorder,
+          "--text: "+colors.text,
+          "--text-secondary: "+colors.textSecondary,
+          "--text-muted: "+colors.textMuted,
+          "--primary: "+colors.primary,
+          "--primary-hover: "+colors.primaryHover,
+          "--accent: "+colors.accent,
+          "--error: "+colors.error,
+          "--error-bg: "+colors.errorBg,
+          "--input-bg: "+colors.inputBg,
+          "--input-border: "+colors.inputBorder,
+          "--input-focus: "+colors.inputFocus,
+          "--tag-bg: "+colors.tagBg,
+          "--tag-text: "+colors.tagText,
+          "--link: "+colors.link,
+          "--divider: "+colors.divider,
+          "--placeholder: "+colors.placeholder,
+          "--shadow: "+colors.shadow
+        ].join("; ");
+        document.body.style.cssText = vars;
+        setCookie("aetherium-theme", name);
+        updateDots(name);
+      }
+
+      function updateDots(name) {
+        document.querySelectorAll(".theme-dot").forEach(function(el) {
+          el.classList.toggle("active", el.getAttribute("data-theme") === name);
+        });
+      }
+
+      window.addEventListener("load", function() {
+        var stored = getCookie("aetherium-theme") || "dark";
+        applyTheme(stored);
+
+        var btn = document.getElementById("theme-btn");
+        var dropdown = document.getElementById("theme-dropdown");
+
+        btn.addEventListener("click", function() {
+          dropdown.classList.toggle("open");
+        });
+
+        document.querySelectorAll(".theme-dot").forEach(function(dot) {
+          dot.addEventListener("click", function() {
+            applyTheme(dot.getAttribute("data-theme"));
+            dropdown.classList.remove("open");
+          });
+        });
+
+        document.addEventListener("click", function(e) {
+          if (!e.target.closest(".theme-toggle")) {
+            dropdown.classList.remove("open");
+          }
+        });
+      });
+    })();
+  </script>
 </head>
 <body>
-  <search-results id="app"></search-results>
+  <div class="home">
+    <h1><span>Aetherium</span> Search</h1>
+    <form action="/search" method="GET">
+      <input type="search" name="q" placeholder="Search the web..." autofocus>
+      <button type="submit">&#8594;</button>
+    </form>
+    <div class="theme-toggle">
+      <span>&#9881;</span> Theme
+      <div class="theme-dropdown" id="theme-dropdown">
+        <div class="theme-dot" data-theme="dark" title="Dark"></div>
+        <div class="theme-dot" data-theme="light" title="Light"></div>
+        <div class="theme-dot" data-theme="slate" title="Slate"></div>
+        <div class="theme-dot" data-theme="ocean" title="Ocean"></div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

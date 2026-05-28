@@ -43,6 +43,7 @@ export interface ChatMessage {
 
 export interface LLMResponse {
   overview: string;
+  thinking?: string;
   model?: string;
   usage?: {
     prompt_tokens: number;
@@ -58,4 +59,5 @@ export interface SearchResult {
   aiOverviewError?: string;
   aiOverviewLoading?: boolean;
   categories?: string[];
+  style?: "clean" | "bold";
 }
