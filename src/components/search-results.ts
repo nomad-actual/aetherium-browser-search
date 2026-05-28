@@ -152,6 +152,7 @@ export interface SearchResultsData {
   results: SearXNGResult[];
   aiOverview?: string;
   aiOverviewError?: string;
+  aiOverviewLoading?: boolean;
   categories?: string[];
 }
 
@@ -165,6 +166,9 @@ export class SearchResults extends LitElement {
 
   @property({ type: String })
   themeMode: ThemeMode = "dark";
+
+  @property({ type: Boolean })
+  aiOverviewLoading: boolean = false;
 
   @state()
   private showThemePicker: boolean = false;
@@ -381,6 +385,27 @@ export class SearchResults extends LitElement {
       white-space: pre-wrap;
     }
 
+    .ai-loading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+    }
+
+    .spinner {
+      flex-shrink: 0;
+    }
+
+    .spinner circle {
+      stroke-dasharray: 31.4;
+      stroke-dashoffset: 10;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); transform-origin: 12 12; }
+    }
+
     .results-count {
       font-size: 13px;
       color: var(--text-muted);
@@ -515,6 +540,22 @@ export class SearchResults extends LitElement {
       </header>
 
       <main class="content">
+        ${this.aiOverviewLoading && !aiOverview && !aiOverviewError
+        ? html`
+            <section class="ai-overview">
+              <div class="ai-overview-label">Generating AI Overview</div>
+              <p class="ai-loading">
+                <svg class="spinner" viewBox="0 0 24 24" width="16" height="16">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="31.4" stroke-dashoffset="10">
+                    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                  </circle>
+                </svg>
+                Analyzing search results...
+              </p>
+            </section>
+          `
+        : ""}
+
         ${aiOverview
         ? html`
             <section class="ai-overview">

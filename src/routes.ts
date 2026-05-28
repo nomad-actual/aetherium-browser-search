@@ -18,11 +18,15 @@ function formatSearXNGResults(response: SearXNGResponse): SearXNGResult[] {
   }));
 }
 
-async function handleSearch(
+function getSearchParams(query: string, category?: string, engines?: string, language?: string, pageno?: string) {
+  return { query, category, engines, language, pageno };
+}
+
+async function fetchResults(
   config: AppConfig,
   q: string,
   opts: { category?: string; engines?: string; language?: string; pageno?: string }
-): Promise<SearchResult> {
+): Promise<{ results: SearXNGResult[]; aiOverviewError?: string }> {
   const searxngUrl = buildSearXNGUrl(config, q, opts);
   const searxngHeaders = getSearchHeaders(config);
 
@@ -35,49 +39,69 @@ async function handleSearch(
     searxngResponse = await searxngRes.json() as SearXNGResponse;
   } catch (err: any) {
     return {
-      query: q.trim(),
       results: [],
       aiOverviewError: `SearXNG error: ${err?.message || "Unknown error"}`
     };
   }
 
-  const results = formatSearXNGResults(searxngResponse);
+  return { results: formatSearXNGResults(searxngResponse) };
+}
 
-  let aiOverview: string | undefined;
-  let aiOverviewError: string | undefined;
-
-  if (config.llmApiUrl) {
-    try {
-      const ai = await getAIOverview(config, q.trim(), results);
-      aiOverview = ai.overview;
-    } catch (err: any) {
-      aiOverviewError = err?.message || "Unknown error";
-    }
-  } else {
-    aiOverviewError = "LLM_API_URL not configured";
-  }
-
-  return {
-    query: q.trim(),
-    results,
-    categories: opts.category ? [opts.category] : undefined,
-    aiOverview,
-    aiOverviewError
-  };
+function buildSearchParamsString(opts: { category?: string; engines?: string; language?: string; pageno?: string }): string {
+  const parts: string[] = [];
+  if (opts.category) parts.push(`category=${encodeURIComponent(opts.category)}`);
+  if (opts.engines) parts.push(`engines=${encodeURIComponent(opts.engines)}`);
+  if (opts.language) parts.push(`language=${encodeURIComponent(opts.language)}`);
+  if (opts.pageno) parts.push(`pageno=${encodeURIComponent(opts.pageno)}`);
+  return parts.join("&");
 }
 
 function createHtmlShell(
   q: string,
   results: SearXNGResult[],
   aiOverview: string | undefined,
-  aiOverviewError: string | undefined
+  aiOverviewError: string | undefined,
+  aiOverviewLoading: boolean,
+  searchParams: string
 ): string {
   const initData = JSON.stringify({
     query: q,
     results,
     aiOverview,
-    aiOverviewError
+    aiOverviewError,
+    aiOverviewLoading
   });
+
+  const sseScript = aiOverviewLoading && searchParams
+    ? `<script>
+(function() {
+  const params = ${JSON.stringify(searchParams)};
+  const source = new EventSource("/search/stream?" + params);
+  source.addEventListener("overview", function(e) {
+    try {
+      const data = JSON.parse(e.data);
+      const app = document.getElementById("app");
+      if (app) {
+        app.data = { ...app.data, aiOverview: data.overview, aiOverviewLoading: false };
+      }
+    } catch(err) {
+      const app = document.getElementById("app");
+      if (app) {
+        app.data = { ...app.data, aiOverviewError: "Failed to load AI overview", aiOverviewLoading: false };
+      }
+    }
+    source.close();
+  });
+  source.addEventListener("error", function() {
+    const app = document.getElementById("app");
+    if (app) {
+      app.data = { ...app.data, aiOverviewError: "AI overview unavailable", aiOverviewLoading: false };
+    }
+    source.close();
+  });
+})();
+</script>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -92,6 +116,7 @@ function createHtmlShell(
   <script>
     document.getElementById("app").data = ${initData};
   </script>
+  ${sseScript}
 </body>
 </html>`;
 }
@@ -107,12 +132,15 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig) {
       return reply.send({ error: "Query parameter 'q' is required" });
     }
 
-    const result = await handleSearch(config, q, { category, engines, language, pageno });
+    const { results, aiOverviewError } = await fetchResults(config, q.trim(), { category, engines, language, pageno });
+    const searchParams = buildSearchParamsString({ category, engines, language, pageno });
     const html = createHtmlShell(
-      result.query,
-      result.results,
-      result.aiOverview,
-      result.aiOverviewError
+      q.trim(),
+      results,
+      undefined,
+      aiOverviewError,
+      !!config.llmApiUrl && !aiOverviewError,
+      searchParams
     );
     return reply.type("text/html").send(html);
   });
@@ -127,19 +155,54 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig) {
       return reply.send({ error: "Query 'q' is required in request body" });
     }
 
-    const result = await handleSearch(config, q, {
+    const { results, aiOverviewError } = await fetchResults(config, q.trim(), {
       category,
       engines,
       language,
       pageno: pageno?.toString()
     });
+    const searchParams = buildSearchParamsString({ category, engines, language, pageno: pageno?.toString() });
     const html = createHtmlShell(
-      result.query,
-      result.results,
-      result.aiOverview,
-      result.aiOverviewError
+      q.trim(),
+      results,
+      undefined,
+      aiOverviewError,
+      !!config.llmApiUrl && !aiOverviewError,
+      searchParams
     );
     return reply.type("text/html").send(html);
+  });
+
+  app.get<{
+    Querystring: { q: string; category?: string; engines?: string; language?: string; pageno?: string };
+  }>("/search/stream", async (request, reply) => {
+    const { q, category, engines, language, pageno } = request.query;
+
+    if (!q || !q.trim()) {
+      reply.code(400);
+      return reply.send({ error: "Query parameter 'q' is required" });
+    }
+
+    reply.header("Content-Type", "text/event-stream");
+    reply.header("Cache-Control", "no-cache");
+    reply.header("Connection", "keep-alive");
+
+    try {
+      const { results } = await fetchResults(config, q.trim(), { category, engines, language, pageno });
+
+      if (!config.llmApiUrl || !results.length) {
+        reply.raw.write(`event: error\ndata: {}\n\n`);
+        reply.raw.end();
+        return;
+      }
+
+      const ai = await getAIOverview(config, q.trim(), results);
+      reply.raw.write(`event: overview\ndata: ${JSON.stringify({ overview: ai.overview })}\n\n`);
+    } catch (err: any) {
+      reply.raw.write(`event: error\ndata: {}\n\n`);
+    }
+
+    reply.raw.end();
   });
 
   app.get("/config", async (request, reply) => {

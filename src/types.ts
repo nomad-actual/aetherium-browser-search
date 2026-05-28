@@ -56,5 +56,6 @@ export interface SearchResult {
   results: SearXNGResult[];
   aiOverview?: string;
   aiOverviewError?: string;
+  aiOverviewLoading?: boolean;
   categories?: string[];
 }
