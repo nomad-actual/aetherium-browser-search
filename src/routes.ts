@@ -194,6 +194,7 @@ body {
 
 .dropdown-item[data-theme="gruvbox"] { background: #282828; border: 1px solid #504945; }
 .dropdown-item[data-theme="tokyonight"] { background: #1a1b26; border: 1px solid #414868; }
+.dropdown-item[data-theme="dark-aero"] { background: linear-gradient(135deg, #0a0e17, #1a2a4a); border: 1px solid #5ba0e6; }
 
 .style-dropdown {
   flex-direction: column;
@@ -623,6 +624,94 @@ body {
   .content-sidebar { display: none; }
   .sidebar-empty { display: block; }
 }
+
+body[data-theme="dark-aero"] .result {
+  background: rgba(20, 30, 50, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(80, 140, 220, 0.15);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+body[data-theme="dark-aero"] .result:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+body[data-theme="dark-aero"] .result-url {
+  color: rgba(74, 96, 128, 0.9);
+}
+
+body[data-theme="dark-aero"] .result-title a {
+  color: #5ba0e6;
+}
+
+body[data-theme="dark-aero"] .result-title a:hover {
+  color: #7ab8f5;
+}
+
+body[data-theme="dark-aero"] .result-snippet {
+  color: rgba(143, 168, 200, 0.85);
+}
+
+body[data-theme="dark-aero"] .result-engine {
+  background: rgba(20, 30, 50, 0.7);
+  border: 1px solid rgba(80, 140, 220, 0.2);
+  color: #4a6080;
+}
+
+body[data-theme="dark-aero"] .ai-overview {
+  background: rgba(20, 30, 50, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body[data-theme="dark-aero"] .sidebar-answer {
+  background: rgba(20, 30, 50, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body[data-theme="dark-aero"] .thinking-block {
+  background: rgba(20, 30, 50, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+body[data-theme="dark-aero"] .header {
+  background: rgba(20, 30, 50, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3), inset 0 -1px 0 rgba(80, 140, 220, 0.1);
+}
+
+body[data-theme="dark-aero"] .dropdown {
+  background: rgba(20, 30, 50, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+body[data-theme="dark-aero"] .style-option {
+  background: none;
+}
+
+body[data-theme="dark-aero"] .style-option:hover {
+  background: rgba(80, 140, 220, 0.1);
+}
+
+body[data-theme="dark-aero"] .empty-state {
+  background: rgba(20, 30, 50, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 80px 24px;
+}
 `.trim();
 
 const dom = new JSDOM("");
@@ -652,6 +741,15 @@ const THEMES = {
     inputBorder: "#414868", inputFocus: "#7aa2f7", tagBg: "#24283b",
     tagText: "#414868", link: "#7aa2f7", divider: "#24283b",
     placeholder: "#414868", shadow: "#00000045"
+  },
+  "dark-aero": {
+    background: "#0a0e17", surface: "rgba(20, 30, 50, 0.75)", surfaceBorder: "rgba(80, 140, 220, 0.3)",
+    text: "#c8ddf0", textSecondary: "#8fa8c8", textMuted: "#4a6080",
+    primary: "#5ba0e6", primaryHover: "#7ab8f5", accent: "#4ade80",
+    error: "#f87171", errorBg: "#f8717120", inputBg: "rgba(15, 22, 35, 0.85)",
+    inputBorder: "rgba(80, 140, 220, 0.25)", inputFocus: "#5ba0e6", tagBg: "rgba(20, 30, 50, 0.75)",
+    tagText: "#4a6080", link: "#5ba0e6", divider: "rgba(20, 30, 50, 0.75)",
+    placeholder: "#4a6080", shadow: "#00000040"
   }
 };
 
@@ -952,6 +1050,7 @@ function createHtmlShell(
           "--shadow: "+colors.shadow
         ].join("; ");
         document.body.style.cssText = vars;
+        document.body.setAttribute("data-theme", name);
         setCookie("aetherium-theme", name);
         document.querySelectorAll(".theme-toggle .theme-name")[0].textContent = name.charAt(0).toUpperCase() + name.slice(1);
         updateThemeActive(name);

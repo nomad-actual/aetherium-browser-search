@@ -133,7 +133,11 @@
       color: var(--text-secondary);
     }
 
-    .theme-dropdown {
+    .theme-toggle-wrap {
+      position: relative;
+    }
+
+   .theme-dropdown {
       display: none;
       position: absolute;
       bottom: calc(100% + 8px);
@@ -164,12 +168,14 @@
     .theme-dot.active { border-color: var(--primary); }
     .theme-dot[data-theme="gruvbox"] { background: #282828; border: 1px solid #504945; }
     .theme-dot[data-theme="tokyonight"] { background: #1a1b26; border: 1px solid #414868; }
+    .theme-dot[data-theme="dark-aero"] { background: #0a0e17; border: 1px solid #5ba0e6; }
   </style>
   <script>
     (function() {
       var themes = {
         gruvbox: { background: "#282828", surface: "#3c3836", surfaceBorder: "#504945", text: "#ebdbb2", textSecondary: "#a89984", textMuted: "#504945", primary: "#fabd2f", primaryHover: "#f2cc6f", accent: "#b8bb26", error: "#fb4934", errorBg: "#fb493414", inputBg: "#282828", inputBorder: "#504945", inputFocus: "#fabd2f", tagBg: "#3c3836", tagText: "#504945", link: "#fabd2f", divider: "#3c3836", placeholder: "#504945", shadow: "#00000050" },
-        tokyonight: { background: "#1a1b26", surface: "#24283b", surfaceBorder: "#414868", text: "#c0caf5", textSecondary: "#a9b1d6", textMuted: "#414868", primary: "#7aa2f7", primaryHover: "#9aa5e1", accent: "#9ece6a", error: "#f7768e", errorBg: "#f7768e14", inputBg: "#1a1b26", inputBorder: "#414868", inputFocus: "#7aa2f7", tagBg: "#24283b", tagText: "#414868", link: "#7aa2f7", divider: "#24283b", placeholder: "#414868", shadow: "#00000045" }
+        tokyonight: { background: "#1a1b26", surface: "#24283b", surfaceBorder: "#414868", text: "#c0caf5", textSecondary: "#a9b1d6", textMuted: "#414868", primary: "#7aa2f7", primaryHover: "#9aa5e1", accent: "#9ece6a", error: "#f7768e", errorBg: "#f7768e14", inputBg: "#1a1b26", inputBorder: "#414868", inputFocus: "#7aa2f7", tagBg: "#24283b", tagText: "#414868", link: "#7aa2f7", divider: "#24283b", placeholder: "#414868", shadow: "#00000045" },
+        "dark-aero": { background: "#0a0e17", surface: "rgba(20,30,50,0.75)", surfaceBorder: "rgba(80,140,220,0.3)", text: "#c8ddf0", textSecondary: "#8fa8c8", textMuted: "#4a6080", primary: "#5ba0e6", primaryHover: "#7ab8f5", accent: "#4ade80", error: "#f87171", errorBg: "#f8717114", inputBg: "rgba(15,22,35,0.85)", inputBorder: "rgba(80,140,220,0.25)", inputFocus: "#5ba0e6", tagBg: "rgba(20,30,50,0.75)", tagText: "#4a6080", link: "#5ba0e6", divider: "rgba(20,30,50,0.75)", placeholder: "#4a6080", shadow: "#00000040" }
       };
 
       function getCookie(name) {
@@ -212,6 +218,7 @@
           "--shadow: "+colors.shadow
         ].join("; ");
         document.body.style.cssText = vars;
+        document.body.setAttribute("data-theme", name);
         setCookie("aetherium-theme", name);
         updateDots(name);
       }
@@ -222,19 +229,26 @@
         });
       }
 
-      window.addEventListener("load", function() {
-        var stored = getCookie("aetherium-theme") || "gruvbox";
-        applyTheme(stored);
+  window.addEventListener("load", function() {
+      var stored = getCookie("aetherium-theme") || "gruvbox";
+      applyTheme(stored);
 
-        var btn = document.getElementById("theme-btn");
-        var dropdown = document.getElementById("theme-dropdown");
+      var btn = document.getElementById("theme-btn");
+      var dropdown = document.getElementById("theme-dropdown");
 
-        btn.addEventListener("click", function() {
-          dropdown.classList.toggle("open");
-        });
+      btn.addEventListener("click", function(e) {
+        if (dropdown.contains(e.target)) return;
+        e.stopPropagation();
+        dropdown.classList.toggle("open");
+      });
+
+      dropdown.addEventListener("click", function(e) {
+        e.stopPropagation();
+      });
 
         document.querySelectorAll(".theme-dot").forEach(function(dot) {
-          dot.addEventListener("click", function() {
+          dot.addEventListener("click", function(e) {
+            e.stopPropagation();
             applyTheme(dot.getAttribute("data-theme"));
             dropdown.classList.remove("open");
           });
@@ -256,11 +270,14 @@
       <input type="search" name="q" placeholder="Search the web..." autofocus>
       <button type="submit">&#8594;</button>
     </form>
-    <div class="theme-toggle" id="theme-btn">
-      <span>&#9881;</span> Theme
+    <div class="theme-toggle-wrap">
+      <div class="theme-toggle" id="theme-btn">
+        <span>&#9881;</span> Theme
+      </div>
       <div class="theme-dropdown" id="theme-dropdown">
         <div class="theme-dot" data-theme="gruvbox" title="Gruvbox"></div>
         <div class="theme-dot" data-theme="tokyonight" title="Tokyo Night"></div>
+        <div class="theme-dot" data-theme="dark-aero" title="Dark Aero"></div>
       </div>
     </div>
   </div>
