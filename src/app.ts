@@ -30,7 +30,13 @@ async function bootstrap() {
   // Serve the HTML shell
   const shellHtml = readFileSync(join(__dirname, "..", "public", "index.html"), "utf-8");
 
-  buildRoutes(server, config);
+  const shutdown = new AbortController();
+
+  server.addHook("onClose", async () => {
+    shutdown.abort();
+  });
+
+  buildRoutes(server, config, shutdown.signal);
 
   const host = process.env.HOST || "0.0.0.0";
   const port = parseInt(process.env.PORT || "3000", 10);
@@ -48,34 +54,8 @@ async function bootstrap() {
     return reply.type("text/html").send(shellHtml);
   });
 
-  if (process.env.HTTPS === "true") {
-    const https = await import("node:https");
-    const fs = await import("node:fs");
-
-    try {
-      const httpsOptions = {
-        cert: fs.readFileSync(process.env.HTTPS_CERT_FILE || "/certs/cert.pem"),
-        key: fs.readFileSync(process.env.HTTPS_KEY_FILE || "/certs/key.pem")
-      };
-
-      await server.listen({ port, host }, (err) => {
-        if (err) {
-          server.log.error(err);
-          process.exit(1);
-        }
-        server.log.info(`HTTPS server listening on https://${host}:${port}`);
-      });
-    } catch (err: any) {
-      server.log.warn(
-        `HTTPS cert files not found. Falling back to HTTP.`
-      );
-      await server.listen({ port, host });
-      server.log.info(`HTTP server listening on http://${host}:${port}`);
-    }
-  } else {
-    await server.listen({ port, host });
-    server.log.info(`HTTP server listening on http://${host}:${port}`);
-  }
+  await server.listen({ port, host });
+   server.log.info(`HTTP server listening on http://${host}:${port}`);
 
   return server;
 }

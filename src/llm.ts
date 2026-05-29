@@ -28,7 +28,8 @@ function parseOpenAISSE(data: string): { event?: string; data?: string } | null 
 export async function getAIOverview(
   config: AppConfig,
   query: string,
-  results: SearXNGResult[]
+  results: SearXNGResult[],
+  signal?: AbortSignal
 ): Promise<LLMResponse> {
   if (!config.llmApiUrl) {
     throw new Error("LLM_API_URL is not configured");
@@ -63,11 +64,12 @@ export async function getAIOverview(
   }
 
   const apiUrl = config.llmApiUrl.replace(/\/v1\/?$/, "").replace(/\/$/, "");
+  const combinedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
   const response = await fetch(`${apiUrl}/v1/chat/completions`, {
     method: "POST",
     headers,
     body,
-    signal: AbortSignal.timeout(30000)
+    signal: combinedSignal
   });
 
   if (!response.ok) {
@@ -88,6 +90,10 @@ export async function getAIOverview(
   let buffer = "";
 
   while (true) {
+    if (signal?.aborted) {
+      reader.cancel(new DOMException("Aborted", "AbortError"));
+      throw new DOMException("Aborted", "AbortError");
+    }
     const { done, value } = await reader.read();
     if (done) break;
 

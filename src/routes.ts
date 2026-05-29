@@ -254,15 +254,19 @@ body {
 }
 
 .content-main {
-  flex: 1;
-  min-width: 0;
+  max-width: 680px;
+  flex-shrink: 0;
 }
 
 .content-sidebar {
-  width: 420px;
+  width: 600px;
   flex-shrink: 0;
   position: sticky;
   top: 80px;
+}
+
+.sidebar-content {
+  margin-top: 16px;
 }
 
 .ai-overview {
@@ -339,7 +343,7 @@ body {
 .results-count {
   font-size: 12px;
   color: var(--text-muted);
-  margin-bottom: 16px;
+  margin-bottom: 0;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -808,14 +812,15 @@ function getSearchParams(query: string, category?: string, engines?: string, lan
 async function fetchResults(
   config: AppConfig,
   q: string,
-  opts: { category?: string; engines?: string; language?: string; pageno?: string }
+  opts: { category?: string; engines?: string; language?: string; pageno?: string },
+  signal?: AbortSignal
 ): Promise<{ results: SearXNGResult[]; aiOverviewError?: string }> {
   const searxngUrl = buildSearXNGUrl(config, q, opts);
   const searxngHeaders = getSearchHeaders(config);
 
   let searxngResponse: SearXNGResponse;
   try {
-    const searxngRes = await fetch(searxngUrl, { headers: searxngHeaders });
+    const searxngRes = await fetch(searxngUrl, { headers: searxngHeaders, signal });
     if (!searxngRes.ok) {
       throw new Error(`SearXNG error ${searxngRes.status}: ${searxngRes.statusText}`);
     }
@@ -1203,6 +1208,7 @@ function createHtmlShell(
         ${resultsHtml}
       </div>
       <aside class="content-sidebar">
+        <div class="sidebar-content">
         <div id="thinking-block" class="thinking-block" style="display: none;">
           <button class="thinking-toggle" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
             <span class="thinking-toggle-label">Thinking</span>
@@ -1229,7 +1235,8 @@ function createHtmlShell(
                     <p>${escapeHtml(aiOverviewError)}</p>`
                  : ''}
          </div>
-      </aside>
+        </div>
+       </aside>
     </div>
   </main>
   ${sseScript}
@@ -1237,7 +1244,7 @@ function createHtmlShell(
 </html>`;
 }
 
-export function buildRoutes(app: FastifyInstance, config: AppConfig) {
+export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSignal?: AbortSignal) {
   app.get<{
     Querystring: { q: string; category?: string; engines?: string; language?: string; pageno?: string; style?: string };
   }>("/search", async (request, reply) => {
@@ -1248,7 +1255,7 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig) {
       return reply.send({ error: "Query parameter 'q' is required" });
     }
 
-    const { results, aiOverviewError } = await fetchResults(config, q.trim(), { category, engines, language, pageno });
+    const { results, aiOverviewError } = await fetchResults(config, q.trim(), { category, engines, language, pageno }, shutdownSignal);
     const searchParams = buildSearchParamsString({ category, engines, language, pageno });
     const validStyle = style === "clean" || style === "bold" ? style : undefined;
     const html = createHtmlShell(
@@ -1278,7 +1285,7 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig) {
       engines,
       language,
       pageno: pageno?.toString()
-    });
+    }, shutdownSignal);
     const searchParams = buildSearchParamsString({ category, engines, language, pageno: pageno?.toString() });
     const validStyle = style === "clean" || style === "bold" ? (style as "clean" | "bold") : undefined;
     const html = createHtmlShell(
@@ -1309,10 +1316,29 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig) {
     reply.header("X-Accel-Buffering", "no");
     reply.header("Access-Control-Allow-Origin", "*");
 
+    const controller = new AbortController();
+
+    // Connect shutdown signal to abort in-flight requests
+    if (shutdownSignal) {
+      if (shutdownSignal.aborted) {
+        controller.abort();
+      } else {
+        shutdownSignal.addEventListener(
+          "abort",
+          () => controller.abort(),
+          { once: true }
+        );
+      }
+    }
+
     const stream = new Readable({
       async read() {
         try {
-          const { results } = await fetchResults(config, q.trim(), { category, engines, language, pageno });
+          const { results } = await fetchResults(
+            config, q.trim(),
+            { category, engines, language, pageno },
+            controller.signal
+          );
 
           if (!config.llmApiUrl || !results.length) {
             this.push(`event: error\ndata: {}\n\n`);
@@ -1320,13 +1346,17 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig) {
             return;
           }
 
-          const ai = await getAIOverview(config, q.trim(), results);
+          const ai = await getAIOverview(config, q.trim(), results, controller.signal);
           if (ai.thinking) {
             this.push(`event: thinking\ndata: ${JSON.stringify({ thinking: ai.thinking })}\n\n`);
           }
           this.push(`event: overview\ndata: ${JSON.stringify({ overview: ai.overview })}\n\n`);
           this.push(null);
         } catch (err: any) {
+          if (err.name === "AbortError") {
+            this.push(null);
+            return;
+          }
           console.error("SSE stream error:", err);
           this.push(`event: error\ndata: {}\n\n`);
           this.push(null);
