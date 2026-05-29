@@ -11,26 +11,26 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --surface-border: #30363d;
-      --text: #c9d1d9;
-      --text-secondary: #8b949e;
-      --text-muted: #484f58;
-      --primary: #58a6ff;
-      --primary-hover: #79b8ff;
-      --accent: #3fb950;
-      --error: #f85149;
-      --error-bg: #f8514914;
-      --input-bg: #0d1117;
-      --input-border: #30363d;
-      --input-focus: #58a6ff;
-      --tag-bg: #21262d;
-      --tag-text: #484f58;
-      --link: #58a6ff;
-      --divider: #21262d;
-      --placeholder: #484f58;
-      --shadow: #01040940;
+      --bg: #282828;
+      --surface: #3c3836;
+      --surface-border: #504945;
+      --text: #ebdbb2;
+      --text-secondary: #a89984;
+      --text-muted: #504945;
+      --primary: #fabd2f;
+      --primary-hover: #f2cc6f;
+      --accent: #b8bb26;
+      --error: #fb4934;
+      --error-bg: #fb493414;
+      --input-bg: #282828;
+      --input-border: #504945;
+      --input-focus: #fabd2f;
+      --tag-bg: #3c3836;
+      --tag-text: #504945;
+      --link: #fabd2f;
+      --divider: #3c3836;
+      --placeholder: #504945;
+      --shadow: #00000050;
     }
 
     body {
@@ -49,7 +49,8 @@
 
     .home {
       text-align: center;
-      max-width: 560px;
+      width: 70%;
+      max-width: 900px;
     }
 
     .home h1 {
@@ -141,7 +142,6 @@
       border: 1px solid var(--surface-border);
       border-radius: 8px;
       padding: 8px;
-      display: none;
       gap: 8px;
       box-shadow: 0 4px 16px var(--shadow);
     }
@@ -160,18 +160,14 @@
 
     .theme-dot:hover { transform: scale(1.15); }
     .theme-dot.active { border-color: var(--primary); }
-    .theme-dot[data-theme="dark"] { background: #0d1117; border: 1px solid #30363d; }
-    .theme-dot[data-theme="light"] { background: #ffffff; border: 1px solid #d0d7de; }
-    .theme-dot[data-theme="slate"] { background: #0f172a; border: 1px solid #334155; }
-    .theme-dot[data-theme="ocean"] { background: #0a192f; border: 1px solid #233554; }
+    .theme-dot[data-theme="gruvbox"] { background: #282828; border: 1px solid #504945; }
+    .theme-dot[data-theme="tokyonight"] { background: #1a1b26; border: 1px solid #414868; }
   </style>
   <script>
     (function() {
       var themes = {
-        dark: { background: "#0d1117", surface: "#161b22", surfaceBorder: "#30363d", text: "#c9d1d9", textSecondary: "#8b949e", textMuted: "#484f58", primary: "#58a6ff", primaryHover: "#79b8ff", accent: "#3fb950", error: "#f85149", errorBg: "#f8514914", inputBg: "#0d1117", inputBorder: "#30363d", inputFocus: "#58a6ff", tagBg: "#21262d", tagText: "#484f58", link: "#58a6ff", divider: "#21262d", placeholder: "#484f58", shadow: "#01040940" },
-        light: { background: "#ffffff", surface: "#f6f8fa", surfaceBorder: "#d0d7de", text: "#1f2328", textSecondary: "#656d76", textMuted: "#8c959f", primary: "#0969da", primaryHover: "#0550ae", accent: "#1a7f37", error: "#cf222e", errorBg: "#ffccd5", inputBg: "#ffffff", inputBorder: "#d0d7de", inputFocus: "#0969da", tagBg: "#eff1f3", tagText: "#656d76", link: "#0969da", divider: "#d0d7de", placeholder: "#8c959f", shadow: "#0104091a" },
-        slate: { background: "#0f172a", surface: "#1e293b", surfaceBorder: "#334155", text: "#e2e8f0", textSecondary: "#94a3b8", textMuted: "#475569", primary: "#818cf8", primaryHover: "#a5b4fc", accent: "#34d399", error: "#f87171", errorBg: "#f8717120", inputBg: "#0f172a", inputBorder: "#334155", inputFocus: "#818cf8", tagBg: "#1e293b", tagText: "#64748b", link: "#818cf8", divider: "#1e293b", placeholder: "#475569", shadow: "#00000050" },
-        ocean: { background: "#0a192f", surface: "#112240", surfaceBorder: "#233554", text: "#ccd6f6", textSecondary: "#8892b0", textMuted: "#495670", primary: "#64ffda", primaryHover: "#80ffeb", accent: "#64ffda", error: "#ff6b6b", errorBg: "#ff6b6b20", inputBg: "#0a192f", inputBorder: "#233554", inputFocus: "#64ffda", tagBg: "#112240", tagText: "#495670", link: "#64ffda", divider: "#112240", placeholder: "#495670", shadow: "#00000060" }
+        gruvbox: { background: "#282828", surface: "#3c3836", surfaceBorder: "#504945", text: "#ebdbb2", textSecondary: "#a89984", textMuted: "#504945", primary: "#fabd2f", primaryHover: "#f2cc6f", accent: "#b8bb26", error: "#fb4934", errorBg: "#fb493414", inputBg: "#282828", inputBorder: "#504945", inputFocus: "#fabd2f", tagBg: "#3c3836", tagText: "#504945", link: "#fabd2f", divider: "#3c3836", placeholder: "#504945", shadow: "#00000050" },
+        tokyonight: { background: "#1a1b26", surface: "#24283b", surfaceBorder: "#414868", text: "#c0caf5", textSecondary: "#a9b1d6", textMuted: "#414868", primary: "#7aa2f7", primaryHover: "#9aa5e1", accent: "#9ece6a", error: "#f7768e", errorBg: "#f7768e14", inputBg: "#1a1b26", inputBorder: "#414868", inputFocus: "#7aa2f7", tagBg: "#24283b", tagText: "#414868", link: "#7aa2f7", divider: "#24283b", placeholder: "#414868", shadow: "#00000045" }
       };
 
       function getCookie(name) {
@@ -190,7 +186,7 @@
       }
 
       function applyTheme(name) {
-        var colors = themes[name] || themes.dark;
+        var colors = themes[name] || themes.gruvbox;
         var vars = [
           "--bg: "+colors.background,
           "--surface: "+colors.surface,
@@ -225,7 +221,7 @@
       }
 
       window.addEventListener("load", function() {
-        var stored = getCookie("aetherium-theme") || "dark";
+        var stored = getCookie("aetherium-theme") || "gruvbox";
         applyTheme(stored);
 
         var btn = document.getElementById("theme-btn");
@@ -258,13 +254,11 @@
       <input type="search" name="q" placeholder="Search the web..." autofocus>
       <button type="submit">&#8594;</button>
     </form>
-    <div class="theme-toggle">
+    <div class="theme-toggle" id="theme-btn">
       <span>&#9881;</span> Theme
       <div class="theme-dropdown" id="theme-dropdown">
-        <div class="theme-dot" data-theme="dark" title="Dark"></div>
-        <div class="theme-dot" data-theme="light" title="Light"></div>
-        <div class="theme-dot" data-theme="slate" title="Slate"></div>
-        <div class="theme-dot" data-theme="ocean" title="Ocean"></div>
+        <div class="theme-dot" data-theme="gruvbox" title="Gruvbox"></div>
+        <div class="theme-dot" data-theme="tokyonight" title="Tokyo Night"></div>
       </div>
     </div>
   </div>
