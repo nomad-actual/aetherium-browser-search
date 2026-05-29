@@ -28,8 +28,19 @@ export function buildSearXNGUrl(config: AppConfig, q: string, opts: {
   return `${base}/search?${params.toString()}`;
 }
 
+export function buildAutocompleterUrl(config: AppConfig, q: string, category?: string): string {
+  const params = new URLSearchParams();
+  params.set("q", q.trim());
+  if (category) {
+    params.set("categories", category);
+  }
+
+  const base = config.searxngUrl.replace(/\/+$/, "");
+  return `${base}/autocompleter?${params.toString()}`;
+}
+
 export function getSearchHeaders(config: AppConfig): Record<string, string> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json,application/x-suggestions+json" };
   if (config.searxngApiKey) {
     headers["Authorization"] = `Bearer ${config.searxngApiKey}`;
   }

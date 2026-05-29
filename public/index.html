@@ -112,6 +112,56 @@
       background: var(--surface-border);
     }
 
+    .autocomplete-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-top: 1px solid var(--surface-border);
+      border-radius: 0 0 8px 8px;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      box-shadow: 0 4px 12px var(--shadow);
+      list-style: none;
+      padding: 4px 0;
+    }
+
+    .autocomplete-dropdown.visible {
+      display: block;
+    }
+
+    .autocomplete-item {
+      padding: 10px 18px;
+      cursor: pointer;
+      font-size: 15px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .autocomplete-item:hover,
+    .autocomplete-item.active {
+      background: var(--surface);
+      color: var(--primary);
+    }
+
+    .autocomplete-item .autocomplete-icon {
+      opacity: 0.4;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+
+    .autocomplete-item .autocomplete-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .theme-toggle {
       margin-top: 24px;
       display: inline-flex;
@@ -266,8 +316,11 @@
 <body>
   <div class="home">
     <h1><span>Aetherium</span> Search</h1>
-    <form action="/search" method="GET">
-      <input type="search" name="q" placeholder="Search the web..." autofocus>
+    <form action="/search" method="GET" id="home-search-form" autocomplete="off">
+      <div style="position: relative;">
+        <input type="search" id="home-search-input" name="q" placeholder="Search the web..." autofocus>
+        <ul class="autocomplete-dropdown" id="home-autocomplete-dropdown"></ul>
+      </div>
       <button type="submit">&#8594;</button>
     </form>
     <div class="theme-toggle-wrap">
@@ -281,5 +334,111 @@
       </div>
     </div>
   </div>
+  <script>
+  (function() {
+    function escapeHtml(str) {
+      var div = document.createElement("div");
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
+    var debounceTimer = null;
+    var currentIndex = -1;
+    var items = [];
+
+    var input = document.getElementById("home-search-input");
+    var dropdown = document.getElementById("home-autocomplete-dropdown");
+    var form = document.getElementById("home-search-form");
+
+    function showSuggestions(suggestions) {
+      if (!suggestions || suggestions.length === 0) {
+        dropdown.classList.remove("visible");
+        dropdown.innerHTML = "";
+        items = [];
+        currentIndex = -1;
+        return;
+      }
+      items = suggestions;
+      dropdown.innerHTML = suggestions.map(function(item, i) {
+        return '<li class="autocomplete-item" data-index="' + i + '">' +
+          '<span class="autocomplete-icon">&#x2315;</span>' +
+          '<span class="autocomplete-text">' + escapeHtml(item) + '</span></li>';
+      }).join("");
+      dropdown.classList.add("visible");
+
+      dropdown.querySelectorAll(".autocomplete-item").forEach(function(el) {
+        el.addEventListener("click", function() {
+          var idx = parseInt(this.getAttribute("data-index"), 10);
+          input.value = items[idx];
+          dropdown.classList.remove("visible");
+          dropdown.innerHTML = "";
+          items = [];
+          currentIndex = -1;
+          form.submit();
+        });
+      });
+    }
+
+    function hideSuggestions() {
+      dropdown.classList.remove("visible");
+      dropdown.innerHTML = "";
+      items = [];
+      currentIndex = -1;
+    }
+
+    function updateActive(index) {
+      dropdown.querySelectorAll(".autocomplete-item").forEach(function(el, i) {
+        el.classList.toggle("active", i === index);
+      });
+    }
+
+    if (input && dropdown) {
+      input.addEventListener("input", function() {
+        var q = input.value.trim();
+        clearTimeout(debounceTimer);
+        if (q.length < 2) {
+          hideSuggestions();
+          return;
+        }
+        debounceTimer = setTimeout(function() {
+          fetch("/autocompleter?q=" + encodeURIComponent(q))
+            .then(function(r) { return r.json(); })
+            .then(function(data) { showSuggestions(data.items || []); })
+            .catch(function() { hideSuggestions(); });
+        }, 150);
+      });
+
+      input.addEventListener("keydown", function(e) {
+        if (items.length === 0) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          currentIndex = (currentIndex + 1) % items.length;
+          updateActive(currentIndex);
+          input.value = items[currentIndex];
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          currentIndex = (currentIndex - 1 + items.length) % items.length;
+          updateActive(currentIndex);
+          input.value = items[currentIndex];
+        } else if (e.key === "Enter") {
+          if (currentIndex >= 0 && currentIndex < items.length) {
+            e.preventDefault();
+            input.value = items[currentIndex];
+            hideSuggestions();
+            form.submit();
+          }
+        } else if (e.key === "Escape") {
+          hideSuggestions();
+        }
+      });
+
+      document.addEventListener("click", function(e) {
+        if (!e.target.closest(".home form")) {
+          hideSuggestions();
+        }
+      });
+    }
+  })();
+  </script>
 </body>
 </html>

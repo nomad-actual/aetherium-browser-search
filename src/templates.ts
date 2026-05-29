@@ -117,6 +117,56 @@ body {
   background: var(--surface-border);
 }
 
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--input-border);
+  border-radius: 0 0 6px 6px;
+  margin-top: -1px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  list-style: none;
+  padding: 4px 0;
+}
+
+.autocomplete-dropdown.visible {
+  display: block;
+}
+
+.autocomplete-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+.autocomplete-item .autocomplete-icon {
+  opacity: 0.4;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.autocomplete-item .autocomplete-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .controls {
   display: flex;
   align-items: center;
@@ -333,6 +383,25 @@ body {
 
 @keyframes spin {
   100% { transform: rotate(360deg); transform-origin: 12 12; }
+}
+
+.ai-cancel {
+  display: block;
+  margin-top: 8px;
+  padding: 4px 12px;
+  background: none;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  width: fit-content;
+}
+
+.ai-cancel:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
 }
 
 .results-count {
@@ -821,20 +890,21 @@ export function createHtmlShell(
   aiOverviewLoading: boolean,
   searchParams: string,
   style?: "clean" | "bold",
-  theme?: string
+  theme?: string,
+  category?: string
 ): string {
   const effectiveTheme = theme || "gruvbox";
   const themeColors = (THEMES as Record<string, typeof THEMES.gruvbox>)[effectiveTheme] || THEMES.gruvbox;
   const themeVars = applyThemeCSSVars(themeColors);
   const effectiveStyle = style || "clean";
 
-  let resultsHtml = "";
+ let resultsHtml = "";
 
   if (results.length > 0) {
     for (const result of results) {
       const urlDisplay = result.parsed_url ? result.parsed_url.join(" \u203A ") : result.url;
       resultsHtml += `
-        <article class="result">
+        <article class="result" data-result="true">
           <div class="result-url">${escapeHtml(urlDisplay)}</div>
           <h3 class="result-title">
             <a href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(result.title)}</a>
@@ -851,7 +921,7 @@ export function createHtmlShell(
   }
 
   let aiSection = "";
-  if (aiOverviewLoading && !aiOverview && !aiOverviewError) {
+ if (aiOverviewLoading && !aiOverview && !aiOverviewError) {
     aiSection = `
         <section class="ai-overview">
           <div class="ai-overview-label">Generating AI Overview</div>
@@ -865,6 +935,7 @@ export function createHtmlShell(
             </span>
             Analyzing search results...
           </p>
+          <button class="ai-cancel" onclick="window.cancelSse()">Cancel</button>
         </section>`;
   }
 
@@ -910,6 +981,27 @@ export function createHtmlShell(
   var url = "/search/stream?q=" + encodeURIComponent(q);
   if (params) { url += "&" + params; }
 
+  var sseSource = null;
+
+  window.cancelSse = function() {
+    if (sseSource) {
+      sseSource.close();
+      sseSource = null;
+    }
+    var sidebar = document.getElementById("sidebar-answer");
+    if (sidebar) {
+      sidebar.className = "sidebar-answer";
+      sidebar.innerHTML = '<div class="ai-overview-label">AI Overview</div><p style="color: var(--text-muted); font-size: 13px;">Cancelled. Click a result or change your query.</p>';
+    }
+    var placeholder = document.getElementById("ai-overview-placeholder");
+    if (placeholder) {
+      placeholder.innerHTML = '<div class="ai-overview-label">AI Overview</div><p style="color: var(--text-muted); font-size: 13px;">Cancelled.</p>';
+      placeholder.classList.remove("sidebar-empty");
+    }
+    var thinking = document.getElementById("thinking-block");
+    if (thinking) thinking.style.display = "none";
+  };
+
   function markdownToHtml(md) {
     if (!md) return "";
     var rawHtml = marked.parse(md);
@@ -920,8 +1012,8 @@ export function createHtmlShell(
   var setupSSE = function() {
     var sidebarAnswer = document.getElementById("sidebar-answer");
     var thinkingBlock = document.getElementById("thinking-block");
-    var source = new EventSource(url);
-    source.addEventListener("thinking", function(e) {
+    sseSource = new EventSource(url);
+    sseSource.addEventListener("thinking", function(e) {
       try {
         var data = JSON.parse(e.data);
         if (thinkingBlock) {
@@ -933,7 +1025,7 @@ export function createHtmlShell(
         console.error("SSE thinking parse error:", err);
       }
     });
-    source.addEventListener("overview", function(e) {
+    sseSource.addEventListener("overview", function(e) {
       try {
         var overviewData = JSON.parse(e.data);
         if (sidebarAnswer) {
@@ -953,17 +1045,31 @@ export function createHtmlShell(
           sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>Failed to load AI overview</p>';
         }
       }
-      queueMicrotask(function() { source.close(); });
+      queueMicrotask(function() { sseSource.close(); sseSource = null; });
     });
-    source.addEventListener("error", function() {
-      if (source.readyState === EventSource.CLOSING || source.readyState === EventSource.CLOSED) return;
+    sseSource.addEventListener("error", function() {
+      if (sseSource.readyState === EventSource.CLOSING || sseSource.readyState === EventSource.CLOSED) return;
       if (sidebarAnswer) {
         sidebarAnswer.className = "sidebar-answer error";
         sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>AI overview unavailable</p>';
       }
-      source.close();
+      sseSource.close();
+      sseSource = null;
     });
   };
+
+  document.addEventListener("click", function(e) {
+    var result = e.target.closest("[data-result]");
+    if (result && sseSource) {
+      sseSource.close();
+      sseSource = null;
+    }
+  }, true);
+
+  window.addEventListener("beforeunload", function() {
+    if (sseSource) sseSource.close();
+  });
+
   setupSSE();
 })();
 </script>`
@@ -1109,13 +1215,132 @@ export function createHtmlShell(
       window.themes = ${JSON.stringify(THEMES)};
     })();
   </script>
+  <script>
+  (function() {
+    function escapeHtml(str) {
+      var div = document.createElement("div");
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
+    var debounceTimer = null;
+    var currentIndex = -1;
+    var items = [];
+    var categoryParam = ${JSON.stringify(category)};
+
+    function showSuggestions(suggestions) {
+      if (!suggestions || suggestions.length === 0) {
+        dropdown.classList.remove("visible");
+        dropdown.innerHTML = "";
+        items = [];
+        currentIndex = -1;
+        return;
+      }
+      items = suggestions;
+      dropdown.innerHTML = suggestions.map(function(item, i) {
+        return '<li class="autocomplete-item" data-index="' + i + '">' +
+          '<span class="autocomplete-icon">&#x2315;</span>' +
+          '<span class="autocomplete-text">' + escapeHtml(item) + '</span></li>';
+      }).join("");
+      dropdown.classList.add("visible");
+
+      dropdown.querySelectorAll(".autocomplete-item").forEach(function(el) {
+        el.addEventListener("click", function() {
+          var idx = parseInt(this.getAttribute("data-index"), 10);
+          input.value = items[idx];
+          dropdown.classList.remove("visible");
+          dropdown.innerHTML = "";
+          items = [];
+          currentIndex = -1;
+          form.submit();
+        });
+      });
+    }
+
+    function hideSuggestions() {
+      dropdown.classList.remove("visible");
+      dropdown.innerHTML = "";
+      items = [];
+      currentIndex = -1;
+    }
+
+    function updateActive(index) {
+      dropdown.querySelectorAll(".autocomplete-item").forEach(function(el, i) {
+        el.classList.toggle("active", i === index);
+      });
+    }
+
+    var input, dropdown, form;
+
+    function initAutocomplete() {
+      input = document.getElementById("search-input");
+      dropdown = document.getElementById("autocomplete-dropdown");
+      form = document.getElementById("search-form");
+      if (!input || !dropdown) return;
+
+      input.addEventListener("input", function() {
+        var q = input.value.trim();
+        clearTimeout(debounceTimer);
+        if (!q.length) {
+          hideSuggestions();
+          return;
+        }
+        debounceTimer = setTimeout(function() {
+          fetch("/autocompleter?q=" + encodeURIComponent(q) + (categoryParam ? "&category=" + encodeURIComponent(categoryParam) : ""))
+            .then(function(r) { return r.json(); })
+            .then(function(data) { showSuggestions(data.items || []); })
+            .catch(function() { hideSuggestions(); });
+        }, 50);
+      });
+
+      input.addEventListener("keydown", function(e) {
+        if (items.length === 0) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          currentIndex = (currentIndex + 1) % items.length;
+          updateActive(currentIndex);
+          input.value = items[currentIndex];
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          currentIndex = (currentIndex - 1 + items.length) % items.length;
+          updateActive(currentIndex);
+          input.value = items[currentIndex];
+        } else if (e.key === "Enter") {
+          if (currentIndex >= 0 && currentIndex < items.length) {
+            e.preventDefault();
+            input.value = items[currentIndex];
+            hideSuggestions();
+            form.submit();
+          }
+        } else if (e.key === "Escape") {
+          hideSuggestions();
+        }
+      });
+
+      document.addEventListener("click", function(e) {
+        if (!e.target.closest(".search-form")) {
+          hideSuggestions();
+        }
+      });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initAutocomplete);
+    } else {
+      initAutocomplete();
+    }
+  })();
+  </script>
 </head>
 <body>
   <header class="header">
     <div class="header-inner">
       <span class="logo" onclick="window.location.href='/'">Aetherium Search</span>
-      <form class="search-form" action="/search" method="GET">
-        <input type="search" class="search-input" name="q" placeholder="Search the web..." value="${escapeHtml(q)}" autofocus>
+      <form class="search-form" action="/search" method="GET" id="search-form" autocomplete="off">
+        <div style="position: relative;">
+          <input type="search" class="search-input" name="q" id="search-input" placeholder="Search the web..." value="${escapeHtml(q)}" autofocus>
+          <ul class="autocomplete-dropdown" id="autocomplete-dropdown"></ul>
+        </div>
         <button type="submit" class="search-btn">\u2192</button>
       </form>
       <div class="controls">
@@ -1159,7 +1384,8 @@ export function createHtmlShell(
               </svg>
             </span>
             Analyzing search results...
-          </p>`
+          </p>
+          <button class="ai-cancel" onclick="window.cancelSse()">Cancel</button>`
 : aiOverview
         ? `<div class="ai-overview-label">AI Overview</div>
            <div class="sidebar-answer" id="mobile-sidebar-answer">${markdownToHtml(aiOverview)}</div>`
@@ -1185,17 +1411,18 @@ export function createHtmlShell(
           <div class="thinking-content"></div>
         </div>
         <div class="sidebar-answer" id="sidebar-answer">
-          ${aiOverviewLoading && !aiOverview && !aiOverviewError
-            ? `<div class="sidebar-loading">
-                  <span class="spinner">
-                    <svg viewBox="0 0 24 24" width="16" height="16">
-                      <circle cx="12" cy="12" r="10" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="31.4" stroke-dashoffset="10">
-                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
-                      </circle>
-                    </svg>
-                  </span>
-                  Analyzing...
-                </div>`
+${aiOverviewLoading && !aiOverview && !aiOverviewError
+             ? `<div class="sidebar-loading">
+                   <span class="spinner">
+                     <svg viewBox="0 0 24 24" width="16" height="16">
+                       <circle cx="12" cy="12" r="10" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="31.4" stroke-dashoffset="10">
+                         <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                       </circle>
+                     </svg>
+                   </span>
+                   Analyzing...
+                 </div>
+                 <button class="ai-cancel" onclick="window.cancelSse()">Cancel</button>`
 : aiOverview
                 ? `<div class="ai-overview-label">AI Overview</div>
                    ${markdownToHtml(aiOverview)}`

@@ -3,7 +3,7 @@ import Fastify, { FastifyInstance } from "fastify";
 import { SearXNGResponse, SearXNGResult } from "./types.js";
 import { AppConfig } from "./config.js";
 import { getAIOverview } from "./llm.js";
-import { buildSearXNGUrl, getSearchHeaders } from "./searxng.js";
+import { buildSearXNGUrl, buildAutocompleterUrl, getSearchHeaders } from "./searxng.js";
 import {
   CSS,
   THEMES,
@@ -85,7 +85,9 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
       aiOverviewError,
       !!config.llmApiUrl && !aiOverviewError,
       searchParams,
-      validStyle
+      validStyle,
+      undefined,
+      category
     );
     return reply.type("text/html").send(html);
   });
@@ -115,7 +117,9 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
       aiOverviewError,
       !!config.llmApiUrl && !aiOverviewError,
       searchParams,
-      validStyle
+      validStyle,
+      undefined,
+      category
     );
     return reply.type("text/html").send(html);
   });
@@ -212,6 +216,34 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
     }
 
     return reply.send({ success: true, message: "Config updated. Restart required for changes to take effect." });
+  });
+
+  app.get<{
+    Querystring: { q: string; category?: string };
+  }>("/autocompleter", async (request, reply) => {
+    const { q, category } = request.query;
+
+    if (!q || !q.trim()) {
+      return reply.code(400).send({ items: [] });
+    }
+
+    const searxngUrl = buildAutocompleterUrl(config, q.trim(), category);
+
+    try {
+      const res = await fetch(searxngUrl, {
+        headers: getSearchHeaders(config),
+        signal: shutdownSignal,
+      });
+
+      if (!res.ok) {
+        return reply.code(res.status).send({ items: [] });
+      }
+
+      const [searchTerm, results] = await res.json();
+      return reply.send({ items: results || [] });
+    } catch {
+      return reply.send({ items: [] });
+    }
   });
 
   app.get("/health", async (request, reply) => {
