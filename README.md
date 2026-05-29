@@ -8,7 +8,7 @@ A privacy-focused browser search bar service that proxies queries to [SearXNG](h
 - **SearXNG Proxy** -- Forward queries to a self-hosted or remote SearXNG instance, supporting categories (general, images, news, video, science, etc.)
 - **AI Overview** -- Automatically generate a concise AI summary from top search results using any OpenAI-compatible LLM endpoint
 - **Lit Web Components** -- Modern, framework-native UI built with Lit web components for fast, reactive rendering
-- **Switchable Themes** -- Built-in dark, light, slate, and ocean themes with cookie-persisted user preference
+- **Switchable Themes** -- Built-in gruvbox and tokyonight themes with cookie-persisted user preference
 - **HTTPS Support** -- Built-in HTTPS with Let's Encrypt / custom certificates, falls back to HTTP if certs are unavailable
 - **Docker Ready** -- Multi-stage build with health checks, ready to deploy via `docker-compose`
 

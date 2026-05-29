@@ -7,22 +7,33 @@ Browser (search provider URL)
     │
     │ GET /search?q=<query>  OR  POST /search { "q": "..." }
     ▼
-┌─────────────────────────────────────────┐
-│  Fastify Service (TypeScript, Port 3000) │
-│                                          │
-│  1. Validate query                       │
-│  2. Forward to SearXNG (JSON response)   │
-│  3. Send top results + query to LLM      │
-│  4. Inject data into Lit component       │
-│  5. Return HTML shell to browser         │
-└──────────────────────────────────────────┘
-         │                  │
-         ▼                  ▼
-   ┌──────────┐      ┌──────────────┐
-   │ SearXNG  │      │ LLM API      │
-   │ :8080    │      │ :8081        │
-   └──────────┘      └──────────────┘
+┌─────────────────────────────────────────────────┐
+│  Fastify Service (TypeScript, Port 3000)        │
+│                                                  │
+│  1. Validate query                               │
+│  2. Forward to SearXNG (JSON response)           │
+│  3. Generate HTML shell + SSE script             │
+│  4. Return HTML shell to browser                 │
+└──────────────────┬───────────────────────────────┘
+                   │
+                   ▼
+             ┌──────────┐
+             │ SearXNG  │
+             │ :8080    │
+             └────┬─────┘
+                  │
+                  ▼
+             Browser (SSE client)
+                  │
+                  │ WebSocket → /search/stream
+                  ▼
+             ┌──────────────┐
+             │ LLM API      │
+             │ :8081        │
+             └──────────────┘
 ```
+
+The AI overview is delivered asynchronously via Server-Sent Events (SSE). The initial `/search` response returns an HTML shell with a loading placeholder, then the browser connects to `/search/stream` which calls the LLM and pushes the overview as SSE events.
 
 ## Endpoints
 
@@ -38,11 +49,11 @@ GET /search?q=<url-encoded-query>&category=<cat>&language=<lang>&pageno=<n>
 |---|---|---|---|
 | `q` | Yes | any string | The search query |
 | `category` | No | `general`, `images`, `news`, `video`, `science`, `it`, `music`, `files`, `maps` | SearXNG search category |
-| `engines` | No | comma-separated | SearXNG engine names (e.g., `google,duckddgo`) |
+| `engines` | No | comma-separated | SearXNG engine names (e.g., `google,duckduckgo`) |
 | `language` | No | BCP 47 code | Language filter (e.g., `en`, `en-US`, `de`) |
 | `pageno` | No | integer | Page number (1-based) |
 
-**Response:** `text/html` — an HTML page with a `<search-results>` Lit web component initialized with server-rendered data.
+**Response:** `text/html` — an HTML page with the search UI and an `<search-results>` component initialized with server-rendered data.
 
 **Example request from browser:**
 ```
@@ -136,72 +147,38 @@ GET /health
    { results: [...], number_of_results: 42, ... }
                         │
                         ▼
-5. Format results for display + LLM context
+5. Generate HTML shell (with loading placeholder for AI overview)
                         │
-               ┌────────┴────────┐
-               ▼                 ▼
-6a. Build LLM prompt       6b. Generate HTML shell
-   system: "You are a       <html>
-   helpful assistant..."      <search-results
-   user: "Based on...         data={query,
-   Query: TS tutorial         results, aiOverview}
-   Results: 1. ...           </search-results>
-   2. ...                     </html>
-   3. ..."
-               │                 │
-               ▼                 ▼
-7. Call LLM API               8. Return HTML
-   POST /v1/chat/completions
-   { model, messages, ... }
-               │
-               ▼
-8. Extract overview text
-               │
-               ▼
-9. Inject into Lit component
-               │
-               ▼
-10. Return final HTML
+                        ▼
+6. Return HTML to browser (immediate response)
+                        │
+                        ▼
+7. Browser renders page, SSE script connects to /search/stream
+                        │
+                        ▼
+8. /search/stream fetches SearXNG results again,
+   calls getAIOverview(), pushes SSE events:
+   - thinking: { thinking: "..." }
+   - overview: { overview: "..." }
+   - error: { error: "..." } (if LLM fails)
+                        │
+                        ▼
+9. SSE client receives events, updates the AI overview sidebar
 ```
 
-## Lit Component (`src/components/search-results.ts`)
+## Module Overview
 
-A custom web component `<search-results>` that renders the UI reactively.
+### Routes (`src/routes.ts`)
 
-### Properties
+Fastify route handlers for `/search`, `/search/stream`, `/config`, and `/health`.
 
-| Property | Type | Description |
-|---|---|---|
-| `data` | `SearchResultsData` | Server-rendered search data (query, results, AI overview) |
-| `theme` | `string` | Active theme name (dark, light, slate, ocean) |
-| `themeMode` | `ThemeMode` | Theme resolution mode: `"dark" | "light" | "system"` |
+**Key functions:**
+- `createHtmlShell(q, results, aiOverview, aiOverviewError, aiOverviewLoading, ...)` — generates the full HTML response
+- `buildSearXNGUrl(config, q, opts)` — constructs the SearXNG search URL
+- `fetchResults(config, q, opts)` — fetches and formats SearXNG results
+- `generateSSEScript(query, searchParams, sseConfig)` — generates the client-side SSE script
 
-### Data Structure
-
-```typescript
-interface SearchResultsData {
-  query: string;
-  results: SearXNGResult[];
-  aiOverview?: string;
-  aiOverviewError?: string;
-  categories?: string[];
-}
-```
-
-### Theme System
-
-Four built-in themes with CSS custom properties:
-
-| Theme | Description |
-|---|---|
-| `dark` | GitHub-dark inspired (default) |
-| `light` | GitHub-light inspired |
-| `slate` | Dark blue-slate palette |
-| `ocean` | Dark ocean teal palette |
-
-Theme preference is persisted via cookie (`aetherium-theme`).
-
-## SearXNG Module (`src/searxng.ts`)
+### SearXNG Module (`src/searxng.ts`)
 
 ### `buildSearXNGUrl(config, q, opts)`
 
@@ -215,11 +192,11 @@ Builds HTTP headers for SearXNG requests, including optional Bearer auth.
 
 Formats search results into text for LLM prompting.
 
-## LLM Module (`src/llm.ts`)
+### LLM Module (`src/llm.ts`)
 
 ### `getAIOverview(config, query, results)`
 
-Sends a chat completion request to an OpenAI-compatible API.
+Sends a streaming chat completion request to an OpenAI-compatible API.
 
 **Request body:**
 ```json
@@ -228,7 +205,7 @@ Sends a chat completion request to an OpenAI-compatible API.
   "messages": [
     {
       "role": "system",
-      "content": "You are a helpful assistant..."
+      "content": "You are a helpful assistant that provides concise, accurate overviews..."
     },
     {
       "role": "user",
@@ -237,13 +214,43 @@ Sends a chat completion request to an OpenAI-compatible API.
   ],
   "max_tokens": 1024,
   "temperature": 0.7,
-  "stream": false
+  "stream": true,
+  "stream_options": { "include_usage": true }
 }
 ```
 
-**Response parsing:** Extracts `choices[0].message.content` as the overview text.
+**Response parsing:** Reads the SSE stream from the LLM, accumulates `choices[0].delta.content` into the overview text, and extracts `delta.reasoning_content` / `delta.thinking` for the thinking block.
 
-## Types (`src/types.ts`)
+### Themes (`src/themes.ts`)
+
+### Theme colors and CSS variable generation.
+
+| Export | Description |
+|---|---|
+| `THEMES` | Record of all available themes with their color palettes |
+| `getThemeColors(name)` | Returns color palette for a theme name, falls back to gruvbox |
+| `getThemeCSSVars(colors)` | Generates CSS custom properties string from a color palette |
+| `generateThemeScript(defaultTheme, defaultStyle)` | Generates client-side theme switching script |
+| `generateThemeDropdownHTML(themeKey, effectiveTheme, themeColors)` | Generates the theme dropdown HTML |
+
+### Theme System
+
+Two built-in themes with CSS custom properties:
+
+| Theme | Description |
+|---|---|
+| `gruvbox` | Gruvbox hard dark palette, yellow accents (default) |
+| `tokyonight` | Tokyo Night palette, blue accents |
+
+Theme preference is persisted via cookie (`aetherium-theme`).
+
+### Scripts (`src/scripts.ts`)
+
+### `generateSSEScript(query, searchParams, sseConfig)`
+
+Generates the client-side JavaScript that connects to `/search/stream` via EventSource, parses SSE events, and updates the AI overview UI. Uses `marked` and `DOMPurify` for HTML sanitization of the AI overview content.
+
+### Types (`src/types.ts`)
 
 | Type | Description |
 |---|---|
@@ -254,7 +261,7 @@ Sends a chat completion request to an OpenAI-compatible API.
 | `LLMResponse` | Parsed LLM response with overview text |
 | `SearchResult` | Final merged result for component data |
 
-## Config (`src/config.ts`)
+### Config (`src/config.ts`)
 
 | Type | Description |
 |---|---|
@@ -270,8 +277,11 @@ See `.env.example` for the full list. Key variables:
 | `SEARXNG_URL` | SearXNG instance base URL (required) |
 | `LLM_API_URL` | LLM API base URL (optional, enables AI overview) |
 | `LLM_MODEL` | Model name for the LLM |
+| `LLM_API_KEY` | API key for the LLM endpoint |
 | `HTTPS` | Enable/disable HTTPS |
 | `AI_OVERVIEW_PROMPT` | Custom prompt template with `{{query}}` and `{{results}}` placeholders |
+| `SSE_MAX_RETRIES` | Max client-side SSE library load retries (default: 30) |
+| `SSE_RETRY_DELAY_MS` | Delay between SSE retry attempts in ms (default: 100) |
 
 ## Running Locally
 
@@ -284,7 +294,7 @@ npm run dev             # watches and restarts on changes
 ## Building for Production
 
 ```bash
-npm run build    # compiles TypeScript + bundles Lit component
+npm run build    # compiles TypeScript
 npm start        # runs the compiled app
 ```
 
@@ -298,20 +308,21 @@ docker compose down       # stop
 
 ## HTML Shell (`public/index.html`)
 
-Minimal HTML page that loads the bundled Lit component and initializes it with data via inline scripts.
+A minimal landing page that serves as the home page (`/`). The search endpoint (`/search`) returns a fully self-contained HTML page with inline CSS, theme switching logic, and the search results UI — no external JS bundle required.
 
 **Search endpoint shell format:**
 ```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script type="module" src="/static/search-results.js"></script>
+  <style>/* theme CSS variables */</style>
+  <script>/* theme switching script */</script>
+  <script src="marked.cdn.js" async></script>
+  <script src="dompurify.cdn.js" async></script>
+  <script>/* SSE client for AI overview */</script>
 </head>
 <body>
-  <search-results id="app"></search-results>
-  <script>
-    document.getElementById("app").data = { query, results, aiOverview, aiOverviewError };
-  </script>
+  <!-- Search UI with results + AI overview sidebar -->
 </body>
 </html>
 ```
