@@ -1,6 +1,6 @@
 export const envSchema = {
   type: "object",
-  required: ["PORT", "SEARXNG_URL"],
+  required: ["SEARXNG_URL"],
   properties: {
     PORT: { type: "string", default: "3000" },
     HOST: { type: "string", default: "0.0.0.0" },
@@ -9,11 +9,8 @@ export const envSchema = {
     LLM_API_URL: { type: "string", description: "Base URL of the OpenAI-compatible LLM API (e.g. llamacpp)" },
     LLM_API_KEY: { type: "string", default: "" },
     LLM_MODEL: { type: "string", default: "llama3.1-8b-instruct" },
-    LLM_MAX_TOKENS: { type: "number", default: 1024 },
-    LLM_TEMPERATURE: { type: "number", default: 0.7 },
-    HTTPS: { type: "string", default: "true" },
-    HTTPS_CERT_FILE: { type: "string", default: "/certs/cert.pem" },
-    HTTPS_KEY_FILE: { type: "string", default: "/certs/key.pem" },
+    LLM_MAX_TOKENS: { type: "string", default: "1024" },
+    LLM_TEMPERATURE: { type: "string", default: "0.7" },
     AI_OVERVIEW_PROMPT: {
       type: "string",
       default: "Based on the following search results, provide a concise, informative overview answering the user's query. Synthesize the key points and cite sources where relevant. Query: {{query}}\n\nResults:\n{{results}}"

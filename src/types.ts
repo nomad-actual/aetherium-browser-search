@@ -1,12 +1,3 @@
-export interface SearchQuery {
-  q: string;
-  categories?: string;
-  engines?: string;
-  language?: string;
-  pageno?: number;
-  format?: "json" | "html";
-}
-
 export interface SearXNGResult {
   title: string;
   url: string;
@@ -50,14 +41,4 @@ export interface LLMResponse {
     completion_tokens: number;
     total_tokens: number;
   };
-}
-
-export interface SearchResult {
-  query: string;
-  results: SearXNGResult[];
-  aiOverview?: string;
-  aiOverviewError?: string;
-  aiOverviewLoading?: boolean;
-  categories?: string[];
-  style?: "clean" | "bold";
 }

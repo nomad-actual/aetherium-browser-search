@@ -2,29 +2,6 @@ import { AppConfig } from "./config.js";
 import { ChatMessage, LLMResponse, SearXNGResult } from "./types.js";
 import { interpolatePrompt } from "./searxng.js";
 
-function parseOpenAISSE(data: string): { event?: string; data?: string } | null {
-  const lines = data.split("\n");
-  let event = "message";
-  let jsonStr = "";
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("event:")) {
-      event = trimmed.slice("event:".length).trim();
-    } else if (trimmed.startsWith("data:")) {
-      jsonStr = trimmed.slice("data:".length).trim();
-    }
-  }
-
-  if (!jsonStr || jsonStr === "[DONE]") return null;
-
-  try {
-    return { event, data: jsonStr };
-  } catch {
-    return null;
-  }
-}
-
 export async function getAIOverview(
   config: AppConfig,
   query: string,
@@ -63,9 +40,9 @@ export async function getAIOverview(
     headers["Authorization"] = `Bearer ${config.llmApiKey}`;
   }
 
-  const apiUrl = config.llmApiUrl.replace(/\/v1\/?$/, "").replace(/\/$/, "");
+  const apiUrl = new URL("/v1/chat/completions", config.llmApiUrl.replace(/\/+$/, "")).toString();
   const combinedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
-  const response = await fetch(`${apiUrl}/v1/chat/completions`, {
+  const response = await fetch(apiUrl, {
     method: "POST",
     headers,
     body,

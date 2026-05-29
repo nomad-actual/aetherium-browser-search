@@ -11,9 +11,10 @@ Browser (search provider URL)
 │  Fastify Service (TypeScript, Port 3000)        │
 │                                                  │
 │  1. Validate query                               │
-│  2. Forward to SearXNG (JSON response)           │
-│  3. Generate HTML shell + SSE script             │
-│  4. Return HTML shell to browser                 │
+│  2. Check SearXNG cache (30s TTL)                │
+│  3. Forward to SearXNG (JSON response)           │
+│  4. Generate HTML shell + SSE script             │
+│  5. Return HTML shell to browser                 │
 └──────────────────┬───────────────────────────────┘
                    │
                    ▼
@@ -25,7 +26,7 @@ Browser (search provider URL)
                   ▼
              Browser (SSE client)
                   │
-                  │ WebSocket → /search/stream
+                  │ EventSource → /search/stream
                   ▼
              ┌──────────────┐
              │ LLM API      │
@@ -134,69 +135,92 @@ GET /health
 
 ```
 1. Browser sends GET /search?q=typescript+tutorial
-                        │
-                        ▼
+                         │
+                         ▼
 2. Route handler extracts query params
-                        │
-                        ▼
-3. Build SearXNG URL:
-   http://searxng:8080/search?q=typescript+tutorial&format=json
-                        │
-                        ▼
-4. Fetch SearXNG response:
-   { results: [...], number_of_results: 42, ... }
-                        │
-                        ▼
-5. Generate HTML shell (with loading placeholder for AI overview)
-                        │
-                        ▼
-6. Return HTML to browser (immediate response)
-                        │
-                        ▼
-7. Browser renders page, SSE script connects to /search/stream
-                        │
-                        ▼
-8. /search/stream fetches SearXNG results again,
+                         │
+                         ▼
+3. Build SearXNG URL (with trailing slash normalization)
+                         │
+                         ▼
+4. Check in-memory cache (30s TTL, keyed by query+opts)
+                         │
+                         ▼
+5. Fetch SearXNG response (if cache miss):
+    { results: [...], number_of_results: 42, ... }
+                         │
+                         ▼
+6. Generate HTML shell (with loading placeholder for AI overview)
+                         │
+                         ▼
+7. Return HTML to browser (immediate response)
+                         │
+                         ▼
+8. Browser renders page, SSE script connects to /search/stream
+                         │
+                         ▼
+9. /search/stream fetches SearXNG results again,
    calls getAIOverview(), pushes SSE events:
    - thinking: { thinking: "..." }
    - overview: { overview: "..." }
    - error: { error: "..." } (if LLM fails)
-                        │
-                        ▼
-9. SSE client receives events, updates the AI overview sidebar
+                         │
+                         ▼
+10. SSE client receives events, updates the AI overview sidebar
 ```
 
 ## Module Overview
+
+### App (`src/app.ts`)
+
+Fastify bootstrap, CORS, env validation (via `@fastify/env`), AbortController for graceful shutdown, static file serving, health endpoint.
+
+**Key features:**
+- `onClose` hook: aborts all in-flight requests, then 1s drain delay for SSE streams
+- Root `/` serves `public/index.html`
+- `GET /health` returns `{ status, timestamp }`
 
 ### Routes (`src/routes.ts`)
 
 Fastify route handlers for `/search`, `/search/stream`, `/config`, and `/health`.
 
 **Key functions:**
-- `createHtmlShell(q, results, aiOverview, aiOverviewError, aiOverviewLoading, ...)` — generates the full HTML response
-- `buildSearXNGUrl(config, q, opts)` — constructs the SearXNG search URL
-- `fetchResults(config, q, opts)` — fetches and formats SearXNG results
-- `generateSSEScript(query, searchParams, sseConfig)` — generates the client-side SSE script
+- `cacheKey(q, opts)` — generates cache key from query and filter params
+- `getCacheEntry(key)` — returns cached results if TTL not expired
+- `fetchResults(config, q, opts)` — checks cache, fetches SearXNG on miss
+- `buildRoutes(app, config, shutdownSignal)` — registers GET /search, POST /search, GET /search/stream SSE
+
+### Templates (`src/templates.ts`)
+
+CSS constant, theme system, HTML helpers, and result formatting. (~734 lines)
+
+**Exports:**
+| Export | Description |
+|---|---|
+| `CSS` | Full application CSS string |
+| `THEMES` | Record of theme color palettes (gruvbox, tokyonight, dark-aero) |
+| `markdownToHtml(md)` | Sanitized markdown → HTML (marked + DOMPurify) |
+| `escapeHtml(str)` | HTML entity escaping |
+| `formatSearXNGResults(response)` | Maps SearXNG response to `SearXNGResult[]` |
+| `getSearchParams(q, category, engines, language, pageno)` | Builds search param object |
+| `createHtmlShell(q, results, aiOverview, ...)` | Generates full HTML response |
+| `buildSearchParamsString(opts)` | Serializes search opts to query string |
 
 ### SearXNG Module (`src/searxng.ts`)
 
-### `buildSearXNGUrl(config, q, opts)`
-
-Constructs the full SearXNG search URL with query parameters.
-
-### `getSearchHeaders(config)`
-
-Builds HTTP headers for SearXNG requests, including optional Bearer auth.
-
-### `formatResultsForLLM(results)`
-
-Formats search results into text for LLM prompting.
+**Exports:**
+| Export | Description |
+|---|---|
+| `buildSearXNGUrl(config, q, opts)` | Constructs SearXNG search URL |
+| `getSearchHeaders(config)` | Builds HTTP headers for SearXNG requests |
+| `interpolatePrompt(prompt, query, results)` | Replaces `{{query}}` and `{{results}}` placeholders |
 
 ### LLM Module (`src/llm.ts`)
 
-### `getAIOverview(config, query, results)`
-
-Sends a streaming chat completion request to an OpenAI-compatible API.
+**Exports:**
+| Export | Description |
+|---|---|
+| `getAIOverview(config, query, results)` | Streaming chat completion to OpenAI-compatible API |
 
 **Request body:**
 ```json
@@ -219,47 +243,16 @@ Sends a streaming chat completion request to an OpenAI-compatible API.
 }
 ```
 
-**Response parsing:** Reads the SSE stream from the LLM, accumulates `choices[0].delta.content` into the overview text, and extracts `delta.reasoning_content` / `delta.thinking` for the thinking block.
-
-### Themes (`src/themes.ts`)
-
-### Theme colors and CSS variable generation.
-
-| Export | Description |
-|---|---|
-| `THEMES` | Record of all available themes with their color palettes |
-| `getThemeColors(name)` | Returns color palette for a theme name, falls back to gruvbox |
-| `getThemeCSSVars(colors)` | Generates CSS custom properties string from a color palette |
-| `generateThemeScript(defaultTheme, defaultStyle)` | Generates client-side theme switching script |
-| `generateThemeDropdownHTML(themeKey, effectiveTheme, themeColors)` | Generates the theme dropdown HTML |
-
-### Theme System
-
-Two built-in themes with CSS custom properties:
-
-| Theme | Description |
-|---|---|
-| `gruvbox` | Gruvbox hard dark palette, yellow accents (default) |
-| `tokyonight` | Tokyo Night palette, blue accents |
-
-Theme preference is persisted via cookie (`aetherium-theme`).
-
-### Scripts (`src/scripts.ts`)
-
-### `generateSSEScript(query, searchParams, sseConfig)`
-
-Generates the client-side JavaScript that connects to `/search/stream` via EventSource, parses SSE events, and updates the AI overview UI. Uses `marked` and `DOMPurify` for HTML sanitization of the AI overview content.
+**Response parsing:** Reads the SSE stream from the LLM, accumulates `choices[0].delta.content` into the overview text, and extracts `delta.reasoning_content` / `delta.thinking` for the thinking block. Uses `AbortSignal.any()` combining shutdown signal + 30s timeout.
 
 ### Types (`src/types.ts`)
 
 | Type | Description |
 |---|---|
-| `SearchQuery` | Incoming search parameters |
 | `SearXNGResult` | A single search result from SearXNG |
 | `SearXNGResponse` | Full SearXNG JSON response |
 | `ChatMessage` | LLM chat message (system/user/assistant) |
 | `LLMResponse` | Parsed LLM response with overview text |
-| `SearchResult` | Final merged result for component data |
 
 ### Config (`src/config.ts`)
 
@@ -267,6 +260,7 @@ Generates the client-side JavaScript that connects to `/search/stream` via Event
 |---|---|
 | `AppConfig` | Runtime configuration object |
 | `buildConfig(processEnv)` | Loads and parses environment variables into AppConfig |
+| `envSchema` | JSON schema for env var validation (`@fastify/env`) |
 
 ## Environment Variables
 
@@ -278,7 +272,6 @@ See `.env.example` for the full list. Key variables:
 | `LLM_API_URL` | LLM API base URL (optional, enables AI overview) |
 | `LLM_MODEL` | Model name for the LLM |
 | `LLM_API_KEY` | API key for the LLM endpoint |
-| `HTTPS` | Enable/disable HTTPS |
 | `AI_OVERVIEW_PROMPT` | Custom prompt template with `{{query}}` and `{{results}}` placeholders |
 | `SSE_MAX_RETRIES` | Max client-side SSE library load retries (default: 30) |
 | `SSE_RETRY_DELAY_MS` | Delay between SSE retry attempts in ms (default: 100) |

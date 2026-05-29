@@ -24,7 +24,8 @@ export function buildSearXNGUrl(config: AppConfig, q: string, opts: {
     params.set("pageno", opts.pageno);
   }
 
-  return `${config.searxngUrl}/search?${params.toString()}`;
+  const base = config.searxngUrl.replace(/\/+$/, "");
+  return `${base}/search?${params.toString()}`;
 }
 
 export function getSearchHeaders(config: AppConfig): Record<string, string> {
@@ -50,14 +51,4 @@ export function interpolatePrompt(
   return prompt
     .replace(/{{query}}/g, query)
     .replace(/{{results}}/g, resultsText);
-}
-
-export function formatResultsForLLM(results: SearXNGResult[]): string {
-  return results
-    .slice(0, 10)
-    .map(
-      (r, i) =>
-        `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.content || "No snippet available"}`
-    )
-    .join("\n\n");
 }

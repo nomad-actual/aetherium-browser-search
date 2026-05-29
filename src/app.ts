@@ -34,6 +34,7 @@ async function bootstrap() {
 
   server.addHook("onClose", async () => {
     shutdown.abort();
+    await new Promise(res => setTimeout(res, 1000));
   });
 
   buildRoutes(server, config, shutdown.signal);
@@ -50,12 +51,12 @@ async function bootstrap() {
   });
 
   // Root serves the HTML shell
-  server.get("/", async (request, reply) => {
+  server.get("/", async (_, reply) => {
     return reply.type("text/html").send(shellHtml);
   });
 
   await server.listen({ port, host });
-   server.log.info(`HTTP server listening on http://${host}:${port}`);
+  server.log.info(`HTTP server listening on http://${host}:${port}`);
 
   return server;
 }
