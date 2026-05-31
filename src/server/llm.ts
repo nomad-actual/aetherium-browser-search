@@ -1,5 +1,5 @@
 import { AppConfig } from "./config.js";
-import { ChatMessage, LLMResponse, SearXNGResult } from "./types.js";
+import { ChatMessage, LLMResponse, SearXNGResult } from "../shared/types.js";
 import { interpolatePrompt } from "./searxng.js";
 
 export async function getAIOverview(

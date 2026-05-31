@@ -1,5 +1,5 @@
 import { AppConfig } from "./config.js";
-import { SearXNGResult } from "./types.js";
+import { SearXNGResult } from "../shared/types.js";
 
 export function buildSearXNGUrl(config: AppConfig, q: string, opts: {
   category?: string;

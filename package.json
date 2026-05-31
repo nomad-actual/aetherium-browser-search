@@ -4,10 +4,12 @@
   "description": "A browser search bar service that proxies to SearXNG and generates AI overviews via OpenAI-compatible LLMs",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/app.js",
-    "dev": "tsx watch src/app.ts",
-    "typecheck": "tsc --noEmit"
+    "build": "tsc -p tsconfig.server.json && esbuild src/client/app.ts --bundle --format=esm --outfile=dist/client/app.js --sourcemap --platform=browser --target=es2022",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:client": "esbuild src/client/app.ts --bundle --format=esm --outfile=dist/client/app.js --sourcemap --platform=browser --target=es2022",
+    "start": "node dist/server/app.js",
+    "dev": "npm run build:client && tsx watch src/server/app.ts",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",
@@ -16,12 +18,11 @@
     "dompurify": "^3.4.7",
     "dotenv": "^16.4.0",
     "fastify": "^5.0.0",
-    "jsdom": "^29.1.1",
     "marked": "^18.0.4"
   },
   "devDependencies": {
-    "@types/jsdom": "^28.0.3",
     "@types/node": "^22.0.0",
+    "esbuild": "^0.28.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

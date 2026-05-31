@@ -1,19 +1,9 @@
 import { Readable } from "node:stream";
 import Fastify, { FastifyInstance } from "fastify";
-import { SearXNGResponse, SearXNGResult } from "./types.js";
+import { SearXNGResponse, SearXNGResult } from "../shared/types.js";
 import { AppConfig } from "./config.js";
 import { getAIOverview } from "./llm.js";
 import { buildSearXNGUrl, buildAutocompleterUrl, getSearchHeaders } from "./searxng.js";
-import {
-  CSS,
-  THEMES,
-  markdownToHtml,
-  escapeHtml,
-  formatSearXNGResults,
-  getSearchParams,
-  createHtmlShell,
-  buildSearchParamsString
-} from "./templates.js";
 
 function cacheKey(q: string, opts: { category?: string; engines?: string; language?: string; pageno?: string }): string {
   return `${q}|${opts.category || ""}|${opts.engines || ""}|${opts.language || ""}|${opts.pageno || ""}`;
@@ -38,7 +28,7 @@ async function fetchResults(
   q: string,
   opts: { category?: string; engines?: string; language?: string; pageno?: string },
   signal?: AbortSignal
-): Promise<{ results: SearXNGResult[]; aiOverviewError?: string }> {
+): Promise<{ results: SearXNGResult[]; error?: string }> {
   const key = cacheKey(q, opts);
   const cached = getCacheEntry(key);
   if (cached) return { results: cached };
@@ -56,73 +46,45 @@ async function fetchResults(
   } catch (err: any) {
     return {
       results: [],
-      aiOverviewError: `SearXNG error: ${err?.message || "Unknown error"}`
+      error: `SearXNG error: ${err?.message || "Unknown error"}`
     };
   }
 
-  const results = formatSearXNGResults(searxngResponse);
+  const results = searxngResponse.results;
   searxngCache.set(key, { results, timestamp: Date.now() });
   return { results };
 }
 
+function buildSearchParamsString(opts: { category?: string; engines?: string; language?: string; pageno?: string }): string {
+  const parts: string[] = [];
+  if (opts.category) parts.push(`category=${encodeURIComponent(opts.category)}`);
+  if (opts.engines) parts.push(`engines=${encodeURIComponent(opts.engines)}`);
+  if (opts.language) parts.push(`language=${encodeURIComponent(opts.language)}`);
+  if (opts.pageno) parts.push(`pageno=${encodeURIComponent(opts.pageno)}`);
+  return parts.join("&");
+}
+
 export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSignal?: AbortSignal) {
   app.get<{
-    Querystring: { q: string; category?: string; engines?: string; language?: string; pageno?: string; style?: string };
-  }>("/search", async (request, reply) => {
-    const { q, category, engines, language, pageno, style } = request.query;
+    Querystring: { q: string; category?: string; engines?: string; language?: string; pageno?: string };
+  }>("/api/search", async (request, reply) => {
+    const { q, category, engines, language, pageno } = request.query;
 
     if (!q || !q.trim()) {
       reply.code(400);
       return reply.send({ error: "Query parameter 'q' is required" });
     }
 
-    const { results, aiOverviewError } = await fetchResults(config, q.trim(), { category, engines, language, pageno }, shutdownSignal);
-    const searchParams = buildSearchParamsString({ category, engines, language, pageno });
-    const validStyle = style === "clean" || style === "bold" ? style : undefined;
-    const html = createHtmlShell(
-      q.trim(),
+    const { results, error } = await fetchResults(config, q.trim(), { category, engines, language, pageno }, shutdownSignal);
+
+    return reply.send({
+      query: q.trim(),
       results,
-      undefined,
-      aiOverviewError,
-      !!config.llmApiUrl && !aiOverviewError,
-      searchParams,
-      validStyle,
-      undefined,
-      category
-    );
-    return reply.type("text/html").send(html);
-  });
-
-  app.post<{
-    Body: { q: string; category?: string; engines?: string; language?: string; pageno?: number; style?: string };
-  }>("/search", async (request, reply) => {
-    const { q, category, engines, language, pageno, style } = request.body;
-
-    if (!q || !q.trim()) {
-      reply.code(400);
-      return reply.send({ error: "Query 'q' is required in request body" });
-    }
-
-    const { results, aiOverviewError } = await fetchResults(config, q.trim(), {
-      category,
-      engines,
-      language,
-      pageno: pageno?.toString()
-    }, shutdownSignal);
-    const searchParams = buildSearchParamsString({ category, engines, language, pageno: pageno?.toString() });
-    const validStyle = style === "clean" || style === "bold" ? (style as "clean" | "bold") : undefined;
-    const html = createHtmlShell(
-      q.trim(),
-      results,
-      undefined,
-      aiOverviewError,
-      !!config.llmApiUrl && !aiOverviewError,
-      searchParams,
-      validStyle,
-      undefined,
-      category
-    );
-    return reply.type("text/html").send(html);
+      number_of_results: results.length,
+      searchParams: buildSearchParamsString({ category, engines, language, pageno }),
+      aiOverviewEnabled: !!config.llmApiUrl && !error,
+      error
+    });
   });
 
   app.get<{
@@ -143,7 +105,6 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
 
     const controller = new AbortController();
 
-    // Connect shutdown signal to abort in-flight requests
     if (shutdownSignal) {
       if (shutdownSignal.aborted) {
         controller.abort();
@@ -240,7 +201,7 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
     return reply.send(stream);
   });
 
-  app.get("/config", async (request, reply) => {
+  app.get("/config", async (_request, reply) => {
     return reply.send({
       searxngUrl: config.searxngUrl,
       llmApiUrl: config.llmApiUrl,
@@ -289,14 +250,14 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
         return reply.code(res.status).send({ items: [] });
       }
 
-      const [searchTerm, results] = await res.json();
+      const [searchTerm, results] = await res.json() as [string, string[]];
       return reply.send({ items: results || [] });
     } catch {
       return reply.send({ items: [] });
     }
   });
 
-  app.get("/health", async (request, reply) => {
+  app.get("/health", async (_request, reply) => {
     return reply.send({
       status: "ok",
       timestamp: new Date().toISOString()
