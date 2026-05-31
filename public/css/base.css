@@ -759,15 +759,16 @@ ul {
     align-items: flex-start;
   }
   .content-sidebar {
-    width: 600px;
-    flex-shrink: 0;
+    flex: 0 1 min(600px, calc(100vw - 280px));
+    min-width: 320px;
     order: 1;
     position: sticky;
     top: 80px;
   }
   .content-main {
+    flex: 1 1 680px;
+    min-width: 320px;
     max-width: 680px;
-    flex-shrink: 0;
     order: 0;
   }
 }

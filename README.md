@@ -6,10 +6,10 @@ A privacy-focused browser search bar service that proxies queries to [SearXNG](h
 
 - **Browser Search Bar Integration** -- Configure any browser to use your service as a search engine via the OpenSearch / keyword URL format
 - **SearXNG Proxy** -- Forward queries to a self-hosted or remote SearXNG instance, supporting categories (general, images, news, video, science, etc.)
-- **AI Overview** -- Automatically generate a concise AI summary from top search results using any OpenAI-compatible LLM endpoint
-- **Lit Web Components** -- Modern, framework-native UI built with Lit web components for fast, reactive rendering
-- **Switchable Themes** -- Built-in gruvbox and tokyonight themes with cookie-persisted user preference
-- **HTTPS Support** -- Built-in HTTPS with Let's Encrypt / custom certificates, falls back to HTTP if certs are unavailable
+- **AI Overview** -- Automatically generate a concise AI summary from top search results using any OpenAI-compatible LLM endpoint, streamed live via SSE
+- **SPA Architecture** -- Client-side single-page application bundled with esbuild for fast, reactive rendering
+- **Switchable Themes** -- Built-in gruvbox, tokyonight, and dark-aero themes with cookie-persisted user preference
+- **Collapsible Thinking Block** -- View the LLM's reasoning process in a collapsible sidebar panel
 - **Docker Ready** -- Multi-stage build with health checks, ready to deploy via `docker-compose`
 
 ## Architecture
@@ -21,10 +21,9 @@ Browser (search provider URL)
     ▼
 ┌─────────────────────────────────┐
 │  Fastify Service (TypeScript)   │
-│  - HTTPS / HTTP                 │
 │  - SearXNG proxy                │
 │  - LLM AI overview              │
-│  - Lit UI component             │
+│  - SPA HTML shell               │
 └─────────┬───────────────┬───────┘
           │               │
           ▼               ▼
@@ -35,10 +34,10 @@ Browser (search provider URL)
           │               │
           └───────┬───────┘
                   ▼
-         Lit Web Component
-         (search-results)
+         Client SPA (esbuild bundle)
+         - Search results rendering
          - Theme switcher
-         - Reactive rendering
+         - SSE streaming client
 ```
 
 ## Quick Start
@@ -66,21 +65,13 @@ LLM_API_URL=http://localhost:8081
 LLM_MODEL=llama3.1-8b-instruct
 ```
 
-3. (Optional) Place HTTPS certificates in `certs/` directory:
-
-```bash
-mkdir -p certs
-# Place cert.pem and key.pem in certs/
-# Or use certbot: certbot certonly --standalone -d search.yourdomain.com
-```
-
-4. Start the service:
+3. Start the service:
 
 ```bash
 docker compose up -d
 ```
 
-5. Visit `http://localhost:3000/health` to verify.
+4. Visit `http://localhost:3000/health` to verify.
 
 ### Local Development
 
@@ -135,9 +126,6 @@ All settings are environment variables (see `.env.example`):
 | `LLM_TEMPERATURE` | No | `0.7` | LLM sampling temperature |
 | `PORT` | No | `3000` | Server port |
 | `HOST` | No | `0.0.0.0` | Server bind address |
-| `HTTPS` | No | `true` | Enable HTTPS |
-| `HTTPS_CERT_FILE` | No | `/certs/cert.pem` | Path to TLS certificate |
-| `HTTPS_KEY_FILE` | No | `/certs/key.pem` | Path to TLS private key |
 | `AI_OVERVIEW_PROMPT` | No | Built-in | Custom prompt template for AI overview |
 
 ### AI Overview Prompt
@@ -171,20 +159,6 @@ Returns an HTML page with search results and AI overview.
 
 ```
 GET https://search.yourdomain.com/search?q=what+is+aetherium&category=general
-```
-
-### `POST /search`
-
-Same as GET but accepts a JSON body.
-
-**Body:**
-
-```json
-{
-  "q": "what is aetherium",
-  "category": "general",
-  "language": "en"
-}
 ```
 
 ### `GET /config`
@@ -224,22 +198,30 @@ Health check endpoint.
 
 ```
 ├── src/
-│   ├── app.ts            # Fastify server bootstrap, HTTPS setup
-│   ├── config.ts         # Environment schema, config loader, AppConfig
-│   ├── routes.ts         # Fastify route handlers
-│   ├── searxng.ts        # SearXNG URL builder, result formatting
-│   ├── llm.ts            # OpenAI-compatible LLM call
-│   ├── types.ts          # TypeScript type definitions
-│   └── components/
-│       └── search-results.ts  # Lit web component with theme switching
+│   ├── server/
+│   │   ├── app.ts            # Fastify server bootstrap
+│   │   ├── config.ts         # Environment schema, config loader, AppConfig
+│   │   ├── routes.ts         # Fastify route handlers
+│   │   ├── searxng.ts        # SearXNG URL builder, result formatting
+│   │   └── llm.ts            # OpenAI-compatible LLM call
+│   ├── client/
+│   │   ├── app.ts            # Client SPA entry point
+│   │   ├── search.ts         # Search page rendering, SSE client
+│   │   ├── ui.ts             # Theme switching, escapeHtml
+│   │   ├── markdown.ts       # markdownToHtml (marked + DOMPurify)
+│   │   ├── autocomplete.ts   # Autocomplete dropdown
+│   │   └── types.ts          # Client-side SearXNGResult type
+│   └── shared/
+│       └── types.ts          # Shared TypeScript interfaces
 ├── public/
-│   ├── index.html        # HTML shell
-│   └── search-results.js # Bundled Lit component
-├── scripts/
-│   └── bundle-lit.ts     # esbuild bundler for Lit component
+│   ├── index.html            # HTML shell
+│   └── css/
+│       ├── base.css          # Base styles, layout, result styling
+│       └── themes.css        # Theme color palettes
 ├── docker-compose.yml
 ├── Dockerfile
-├── tsconfig.json
+├── tsconfig.server.json
+├── tsconfig.client.json
 └── .env.example
 ```
 

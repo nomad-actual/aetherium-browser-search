@@ -1,0 +1,8 @@
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/" xmlns:moz="http://www.mozilla.org/2006/browser/search/">
+  <ShortName>Aetherium</ShortName>
+  <Description>Privacy-respecting search with AI overviews</Description>
+  <InputEncoding>UTF-8</InputEncoding>
+  <Image width="16" height="16" type="image/svg+xml">data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='none' stroke='%2358a6ff' stroke-width='1.5'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%2358a6ff'/%3E%3C/svg%3E</Image>
+  <Url type="text/html" template="/search?q={searchTerms}"/>
+  <moz:SearchForm>/</moz:SearchForm>
+</OpenSearchDescription>

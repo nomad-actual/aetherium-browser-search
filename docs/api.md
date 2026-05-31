@@ -1,6 +1,6 @@
 # API Documentation
 
-Aetherium Browser Search exposes a REST API for search queries, configuration management, and health checks. The `/search` endpoint returns fully rendered HTML. Other endpoints return JSON.
+Aetherium Browser Search exposes a REST API for search queries, configuration management, and health checks. The `/search` endpoint returns a fully rendered HTML page. Other endpoints return JSON.
 
 **Base URL:** `http://localhost:3000` (or your configured host/port)
 
@@ -9,7 +9,6 @@ Aetherium Browser Search exposes a REST API for search queries, configuration ma
 | Endpoint | Response Type |
 |---|---|
 | `GET /search` | `text/html` |
-| `POST /search` | `text/html` |
 | `GET /search/stream` | `text/event-stream` (SSE) |
 | `GET /config` | `application/json` |
 | `POST /config` | `application/json` |
@@ -22,7 +21,7 @@ Aetherium Browser Search exposes a REST API for search queries, configuration ma
 
 ### `GET /`
 
-Serves the landing page with the main search form. The page features a centered search input, theme switcher, and inline CSS/JavaScript for theme switching (gruvbox and tokyonight themes).
+Serves the landing page with the main search form. The page features a centered search input, theme switcher, and inline CSS/JavaScript for theme switching (gruvbox, tokyonight, and dark-aero themes).
 
 **Response:** `text/html` — a standalone HTML page with no external dependencies.
 
@@ -32,7 +31,9 @@ Serves the landing page with the main search form. The page features a centered 
 
 ### `GET /search`
 
-Performs a web search via SearXNG and returns a fully rendered HTML page with search results, a sticky header with search form, and an AI overview sidebar. The AI overview is delivered asynchronously via Server-Sent Events (SSE).
+Performs a web search via SearXNG and returns a fully rendered HTML page with search results and an AI overview sidebar. The AI overview is delivered asynchronously via Server-Sent Events (SSE).
+
+The page is a single-page application (SPA) — the HTML contains the shell with inline CSS, and the client-side JavaScript (bundled via esbuild at `/js/app.js`) handles rendering search results, theme switching, and SSE streaming.
 
 **Query Parameters:**
 
@@ -43,17 +44,16 @@ Performs a web search via SearXNG and returns a fully rendered HTML page with se
 | `engines` | No | string | (all) | Comma-separated list of SearXNG engine names (e.g., `google,duckduckgo`) |
 | `language` | No | string | (default) | BCP 47 language tag filter (e.g., `en`, `en-US`, `de`, `ja`) |
 | `pageno` | No | integer | `1` | Page number for pagination (1-based) |
-| `style` | No | string | `clean` | UI style. One of: `clean`, `bold` |
 
 **Response:** `text/html`
 
 A complete HTML document with:
-- Sticky header containing the logo, search form, style toggle (clean/bold), and theme switcher (gruvbox/tokyonight)
+- Sticky header containing the logo, search form, and theme switcher
 - Main content area with search results and result count
-- Right sidebar (420px, sticky) with AI overview section and collapsible thinking block
+- Right sidebar (600px, sticky) with AI overview section and collapsible thinking block
 - Inline CSS with CSS custom properties for theming
-- SSE client script that connects to `/search/stream` for live AI overview updates
-- Theme switching JavaScript with cookie persistence
+- Client-side JavaScript bundle at `/js/app.js` that handles rendering, theme switching, and SSE streaming
+- Theme switching with cookie persistence
 
 **Example Request:**
 
@@ -63,41 +63,9 @@ GET /search?q=how+to+fix+a+leaky+faucet&category=general&language=en
 
 ---
 
-### `POST /search`
-
-Same as `GET /search` but accepts search parameters in the request body as JSON. Useful for programmatic integration or when the query contains characters that are problematic in URLs.
-
-**Request Body (`application/json`):**
-
-| Field | Required | Type | Default | Description |
-|---|---|---|---|---|
-| `q` | Yes | string | — | The search query |
-| `category` | No | string | `general` | SearXNG search category |
-| `engines` | No | string | (all) | Comma-separated engine names |
-| `language` | No | string | (default) | BCP 47 language tag |
-| `pageno` | No | integer | `1` | Page number (1-based) |
-| `style` | No | string | `clean` | UI style. One of: `clean`, `bold` |
-
-**Response:** `text/html` — same format as `GET /search`.
-
-**Example Request:**
-
-```http
-POST /search
-Content-Type: application/json
-
-{
-  "q": "what is the capital of France?",
-  "category": "general",
-  "language": "en"
-}
-```
-
----
-
 ### `GET /search/stream` (Server-Sent Events)
 
-Receives the AI overview asynchronously as SSE events. The HTML shell automatically connects to this endpoint when `LLM_API_URL` is configured. Fetches search results from SearXNG, sends them to the LLM, and streams the response back as SSE events.
+Receives the AI overview asynchronously as SSE events. The SPA automatically connects to this endpoint when `LLM_API_URL` is configured. Fetches search results from SearXNG, sends them to the LLM, and streams the response back as SSE events.
 
 **Query Parameters:** Same as `GET /search` (`q`, `category`, `engines`, `language`, `pageno`).
 
@@ -105,20 +73,28 @@ Receives the AI overview asynchronously as SSE events. The HTML shell automatica
 
 | Event | Data | Description |
 |---|---|---|
+| `session` | `{sessionId}` | Unique session ID for cancellation |
 | `thinking` | `{"thinking": "..."}` | The LLM's reasoning/thinking process (if available) |
-| `overview` | `{"overview": "..."}` | The generated AI overview in markdown |
+| `incremental` | raw text | Streaming overview text (markdown) |
+| `overview` | `{}` | Signals the overview is complete |
 | `error` | `{}` | Error message if LLM call fails or no LLM configured |
 
 **Example SSE Response:**
 
 ```
+event: session
+data: abc123-session-id
+
 event: thinking
 data: {"thinking":"Let me look at the search results..."}
 
-event: overview
-data: {"overview":"The capital of France is **Paris**, the country's largest city..."}
+event: incremental
+data: The capital of France is
 
-event: error
+event: incremental
+data: **Paris**, the country's largest city.
+
+event: overview
 data: {}
 ```
 
@@ -127,6 +103,7 @@ data: {}
 - Headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`, `Access-Control-Allow-Origin: *`
 - Fetches SearXNG results, formats top 10 for LLM prompt, calls `getAIOverview()`
 - Cleans thinking artifacts from the final overview response
+- Supports cancellation via `POST /search/cancel`
 
 ---
 
@@ -168,7 +145,7 @@ Returns the current runtime configuration. Sensitive values (API keys) are retur
 
 ### `POST /config`
 
-Validates configuration changes submitted as JSON. **Changes are validated but do not take effect until the service is restarted.** Currently validates only `searxngUrl` and `llmApiUrl` field types.
+Validates configuration changes submitted as JSON. **Changes are validated but do not take effect until the service is restarted.**
 
 **Request Body (`application/json`):**
 
@@ -306,7 +283,7 @@ When an LLM is configured (`LLM_API_URL` is set), the AI overview is generated a
 4. Streaming chat completion request sent to OpenAI-compatible API at `{llmApiUrl}/v1/chat/completions`
 5. SSE response is parsed — `choices[0].delta.content` accumulated as overview, `delta.reasoning_content` / `delta.thinking` accumulated as thinking
 6. Thinking artifacts are cleaned from the final overview using pattern-based removal
-7. Events pushed to SSE stream: `thinking`, then `overview` (or `error` on failure)
+7. Events pushed to SSE stream: `session`, `thinking`, then `incremental` (streaming chunks), then `overview` (or `error` on failure)
 
 **Default System Prompt:**
 
@@ -333,7 +310,6 @@ Results:
     { "role": "user", "content": "Based on the following search results..." }
   ],
   "max_tokens": 1024,
-  "max_thinking_tokens": 0,
   "temperature": 0.7,
   "stream": true,
   "stream_options": { "include_usage": true }
@@ -350,7 +326,7 @@ See `.env.example` for the full list.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `PORT` | Yes | `3000` | Server port |
+| `PORT` | No | `3000` | Server port |
 | `HOST` | No | `0.0.0.0` | Server bind address |
 | `SEARXNG_URL` | Yes | — | Base URL of SearXNG instance |
 | `SEARXNG_API_KEY` | No | `""` | SearXNG Bearer auth key |
@@ -359,12 +335,7 @@ See `.env.example` for the full list.
 | `LLM_MODEL` | No | `llama3.1-8b-instruct` | Model name for LLM |
 | `LLM_MAX_TOKENS` | No | `1024` | Max tokens for LLM responses |
 | `LLM_TEMPERATURE` | No | `0.7` | LLM temperature (0–1) |
-| `HTTPS` | No | `true` | Enable HTTPS |
-| `HTTPS_CERT_FILE` | No | `/certs/cert.pem` | TLS certificate path |
-| `HTTPS_KEY_FILE` | No | `/certs/key.pem` | TLS key path |
 | `AI_OVERVIEW_PROMPT` | No | *(default template)* | Custom prompt with `{{query}}` and `{{results}}` placeholders |
-| `SSE_MAX_RETRIES` | No | `30` | Max client-side SSE library load retries |
-| `SSE_RETRY_DELAY_MS` | No | `100` | Delay between SSE retry attempts (ms) |
 
 ---
 
@@ -382,12 +353,13 @@ No rate limiting is implemented at the application level. Rate limiting should b
 
 ## Themes
 
-The HTML response includes inline CSS for two built-in themes. The active theme is persisted in a cookie named `aetherium-theme` (1-year expiry). Theme switching is available via a dropdown button in the header.
+The HTML response includes inline CSS for three built-in themes. The active theme is persisted in a cookie named `aetherium-theme` (1-year expiry). Theme switching is available via a dropdown button in the header.
 
 | Theme | Palette | Description |
 |---|---|---|
 | `gruvbox` | Gruvbox Hard Dark | Dark brown palette, yellow accents (default) |
 | `tokyonight` | Tokyo Night | Dark blue palette, blue accents |
+| `dark-aero` | Dark Aero | Glassmorphism with backdrop blur, blue accents |
 
 ### Theme Colors
 
@@ -418,20 +390,7 @@ Both themes define 20 CSS custom properties:
 
 ### Adding Themes
 
-Themes are defined in `src/themes.ts` (`THEMES` record) and duplicated in `src/routes.ts` (`THEMES` constant used by `createHtmlShell`). Add a new theme to both locations.
-
----
-
-## UI Styles
-
-The `style` parameter controls the visual weight of the search results UI.
-
-| Style | Description |
-|---|---|
-| `clean` | Light, minimal styling (default) |
-| `bold` | Heavier visual weight with more contrast |
-
-Selected style is persisted in a cookie named `aetherium-style` (1-year expiry). Toggle available via a dropdown button in the header.
+Themes are defined in `public/css/themes.css` as CSS custom property sets. Add a new theme with a `body[data-theme="your-theme"]` selector and include the name in the `themeNames` array in `src/client/ui.ts`.
 
 ---
 
@@ -439,9 +398,9 @@ Selected style is persisted in a cookie named `aetherium-style` (1-year expiry).
 
 | Breakpoint | Behavior |
 |---|---|
-| `> 960px` | Standard layout: main content + 420px sticky sidebar |
-| `<= 960px` | Sidebar hidden; mobile AI overview placeholder shown above results |
-| `<= 640px` | Header wraps; search form takes full width below controls; content padding reduced to 16px |
+| `> 960px` | Standard layout: main content (flex) + sidebar (flex, up to 600px, sticky) |
+| `<= 960px` | Sidebar moves above results; both columns stack vertically |
+| `<= 640px` | Header wraps; search form takes full width below controls; content padding reduced to 12px |
 
 ---
 
@@ -449,12 +408,17 @@ Selected style is persisted in a cookie named `aetherium-style` (1-year expiry).
 
 | Module | Path | Purpose |
 |---|---|---|
-| App Entry | `src/app.ts` | Fastify server bootstrap, HTTPS handling, static file serving |
-| Routes | `src/routes.ts` | All HTTP route handlers and HTML shell generation |
-| SearXNG | `src/searxng.ts` | URL building, headers, result formatting for LLM |
-| LLM | `src/llm.ts` | Streaming chat completion, SSE parsing, thinking cleanup |
-| Scripts | `src/scripts.ts` | SSE client script generation |
-| Themes | `src/themes.ts` | Theme color definitions and CSS variable generation |
-| Styles | `src/styles.ts` | Base CSS (referenced but not actively used — CSS is embedded in `routes.ts`) |
-| Types | `src/types.ts` | TypeScript interfaces for all data models |
-| Config | `src/config.ts` | Environment variable parsing and `AppConfig` interface |
+| App Entry | `src/server/app.ts` | Fastify server bootstrap, static file serving |
+| Routes | `src/server/routes.ts` | All HTTP route handlers |
+| SearXNG | `src/server/searxng.ts` | URL building, headers, result formatting for LLM |
+| LLM | `src/server/llm.ts` | Streaming chat completion, SSE parsing, thinking cleanup |
+| Client App | `src/client/app.ts` | Client-side SPA entry point (bundled by esbuild) |
+| Client Search | `src/client/search.ts` | Search page rendering, SSE client |
+| Client UI | `src/client/ui.ts` | Theme switching, `escapeHtml` |
+| Client Markdown | `src/client/markdown.ts` | `markdownToHtml` (marked + DOMPurify) |
+| Client Autocomplete | `src/client/autocomplete.ts` | Autocomplete dropdown logic |
+| Client Types | `src/client/types.ts` | Client-side `SearXNGResult` type |
+| Shared Types | `src/shared/types.ts` | TypeScript interfaces for all data models |
+| Config | `src/server/config.ts` | Environment variable parsing and `AppConfig` interface |
+| Public CSS | `public/css/base.css` | Base styles, layout, result styling |
+| Public CSS | `public/css/themes.css` | Theme color palettes (gruvbox, tokyonight, dark-aero) |

@@ -5,7 +5,7 @@
 ```
 Browser (search provider URL)
     │
-    │ GET /search?q=<query>  OR  POST /search { "q": "..." }
+    │ GET /search?q=<query>
     ▼
 ┌─────────────────────────────────────────────────┐
 │  Fastify Service (TypeScript, Port 3000)        │
@@ -13,8 +13,8 @@ Browser (search provider URL)
 │  1. Validate query                               │
 │  2. Check SearXNG cache (30s TTL)                │
 │  3. Forward to SearXNG (JSON response)           │
-│  4. Generate HTML shell + SSE script             │
-│  5. Return HTML shell to browser                 │
+│  4. Return HTML shell + /js/app.js SPA bundle    │
+│  5. Browser connects to /search/stream for SSE   │
 └──────────────────┬───────────────────────────────┘
                    │
                    ▼
@@ -24,7 +24,7 @@ Browser (search provider URL)
              └────┬─────┘
                   │
                   ▼
-             Browser (SSE client)
+             Client SPA (SSE client)
                   │
                   │ EventSource → /search/stream
                   ▼
@@ -34,13 +34,13 @@ Browser (search provider URL)
              └──────────────┘
 ```
 
-The AI overview is delivered asynchronously via Server-Sent Events (SSE). The initial `/search` response returns an HTML shell with a loading placeholder, then the browser connects to `/search/stream` which calls the LLM and pushes the overview as SSE events.
+The AI overview is delivered asynchronously via Server-Sent Events (SSE). The `/search` response returns an HTML shell with the client-side SPA bundle (`/js/app.js`), then the browser connects to `/search/stream` which calls the LLM and pushes the overview as SSE events.
 
 ## Endpoints
 
 ### `GET /search`
 
-Returns an HTML page with a Lit web component that renders search results and AI overview. This is the primary endpoint for browser search bar integration.
+Returns an HTML page with a client-side SPA that renders search results and AI overview. This is the primary endpoint for browser search bar integration.
 
 ```
 GET /search?q=<url-encoded-query>&category=<cat>&language=<lang>&pageno=<n>
@@ -54,29 +54,12 @@ GET /search?q=<url-encoded-query>&category=<cat>&language=<lang>&pageno=<n>
 | `language` | No | BCP 47 code | Language filter (e.g., `en`, `en-US`, `de`) |
 | `pageno` | No | integer | Page number (1-based) |
 
-**Response:** `text/html` — an HTML page with the search UI and an `<search-results>` component initialized with server-rendered data.
+**Response:** `text/html` — an HTML page with the search UI shell and client-side JavaScript bundle at `/js/app.js`.
 
 **Example request from browser:**
 ```
 https://search.example.com/search?q=how+to+fix+a+leaky+faucet
 ```
-
-### `POST /search`
-
-Same as GET but accepts JSON body. Useful for programmatic integration or when the query contains characters that are problematic in URLs.
-
-```
-POST /search
-Content-Type: application/json
-
-{
-  "q": "what is the capital of France?",
-  "category": "general",
-  "language": "en"
-}
-```
-
-**Response:** `text/html` — same HTML as GET.
 
 ### `GET /config`
 
@@ -147,23 +130,25 @@ GET /health
                          │
                          ▼
 5. Fetch SearXNG response (if cache miss):
-    { results: [...], number_of_results: 42, ... }
+     { results: [...], number_of_results: 42, ... }
                          │
                          ▼
-6. Generate HTML shell (with loading placeholder for AI overview)
+6. Return HTML shell to browser (immediate response)
                          │
                          ▼
-7. Return HTML to browser (immediate response)
+7. Browser loads /js/app.js (client SPA bundle)
                          │
                          ▼
-8. Browser renders page, SSE script connects to /search/stream
+8. Client SPA renders results, SSE script connects to /search/stream
                          │
                          ▼
 9. /search/stream fetches SearXNG results again,
    calls getAIOverview(), pushes SSE events:
+   - session: { sessionId: "..." }
    - thinking: { thinking: "..." }
-   - overview: { overview: "..." }
-   - error: { error: "..." } (if LLM fails)
+   - incremental: "partial text..." (streaming chunks)
+   - overview: {} (signals completion)
+   - error: {} (if LLM fails)
                          │
                          ▼
 10. SSE client receives events, updates the AI overview sidebar
@@ -171,16 +156,18 @@ GET /health
 
 ## Module Overview
 
-### App (`src/app.ts`)
+### Server App (`src/server/app.ts`)
 
 Fastify bootstrap, CORS, env validation (via `@fastify/env`), AbortController for graceful shutdown, static file serving, health endpoint.
 
 **Key features:**
 - `onClose` hook: aborts all in-flight requests, then 1s drain delay for SSE streams
 - Root `/` serves `public/index.html`
+- `/search` serves `public/index.html` (SPA shell)
+- `/js/` serves compiled client JS from `dist/client/`
 - `GET /health` returns `{ status, timestamp }`
 
-### Routes (`src/routes.ts`)
+### Routes (`src/server/routes.ts`)
 
 Fastify route handlers for `/search`, `/search/stream`, `/config`, and `/health`.
 
@@ -188,25 +175,9 @@ Fastify route handlers for `/search`, `/search/stream`, `/config`, and `/health`
 - `cacheKey(q, opts)` — generates cache key from query and filter params
 - `getCacheEntry(key)` — returns cached results if TTL not expired
 - `fetchResults(config, q, opts)` — checks cache, fetches SearXNG on miss
-- `buildRoutes(app, config, shutdownSignal)` — registers GET /search, POST /search, GET /search/stream SSE
+- `buildRoutes(app, config, shutdownSignal)` — registers GET /search, GET /search/stream SSE
 
-### Templates (`src/templates.ts`)
-
-CSS constant, theme system, HTML helpers, and result formatting. (~734 lines)
-
-**Exports:**
-| Export | Description |
-|---|---|
-| `CSS` | Full application CSS string |
-| `THEMES` | Record of theme color palettes (gruvbox, tokyonight, dark-aero) |
-| `markdownToHtml(md)` | Sanitized markdown → HTML (marked + DOMPurify) |
-| `escapeHtml(str)` | HTML entity escaping |
-| `formatSearXNGResults(response)` | Maps SearXNG response to `SearXNGResult[]` |
-| `getSearchParams(q, category, engines, language, pageno)` | Builds search param object |
-| `createHtmlShell(q, results, aiOverview, ...)` | Generates full HTML response |
-| `buildSearchParamsString(opts)` | Serializes search opts to query string |
-
-### SearXNG Module (`src/searxng.ts`)
+### SearXNG Module (`src/server/searxng.ts`)
 
 **Exports:**
 | Export | Description |
@@ -215,7 +186,7 @@ CSS constant, theme system, HTML helpers, and result formatting. (~734 lines)
 | `getSearchHeaders(config)` | Builds HTTP headers for SearXNG requests |
 | `interpolatePrompt(prompt, query, results)` | Replaces `{{query}}` and `{{results}}` placeholders |
 
-### LLM Module (`src/llm.ts`)
+### LLM Module (`src/server/llm.ts`)
 
 **Exports:**
 | Export | Description |
@@ -245,7 +216,38 @@ CSS constant, theme system, HTML helpers, and result formatting. (~734 lines)
 
 **Response parsing:** Reads the SSE stream from the LLM, accumulates `choices[0].delta.content` into the overview text, and extracts `delta.reasoning_content` / `delta.thinking` for the thinking block. Uses `AbortSignal.any()` combining shutdown signal + 30s timeout.
 
-### Types (`src/types.ts`)
+### Client App (`src/client/app.ts`)
+
+Client-side SPA entry point. Bundled by esbuild to `dist/client/app.js`, served at `/js/app.js`.
+
+**Key functions:**
+- `renderHome()` — renders the home page with search form
+- `renderSearchPage(q, results, error, category)` — renders search results page
+- `initSSE(urlParams)` — connects to SSE stream for AI overview streaming
+
+### Client UI (`src/client/ui.ts`)
+
+**Exports:**
+| Export | Description |
+|---|---|
+| `initTheme()` | Initializes theme switching from cookie |
+| `escapeHtml(str)` | HTML entity escaping |
+
+### Client Markdown (`src/client/markdown.ts`)
+
+**Exports:**
+| Export | Description |
+|---|---|
+| `markdownToHtml(md)` | Sanitized markdown → HTML (marked + DOMPurify) |
+
+### Client Autocomplete (`src/client/autocomplete.ts`)
+
+**Exports:**
+| Export | Description |
+|---|---|
+| `initAutocomplete(isSearchPage)` | Initializes search autocomplete dropdown |
+
+### Shared Types (`src/shared/types.ts`)
 
 | Type | Description |
 |---|---|
@@ -254,7 +256,13 @@ CSS constant, theme system, HTML helpers, and result formatting. (~734 lines)
 | `ChatMessage` | LLM chat message (system/user/assistant) |
 | `LLMResponse` | Parsed LLM response with overview text |
 
-### Config (`src/config.ts`)
+### Client Types (`src/client/types.ts`)
+
+| Type | Description |
+|---|---|
+| `SearXNGResult` | Client-side search result type |
+
+### Config (`src/server/config.ts`)
 
 | Type | Description |
 |---|---|
@@ -273,8 +281,6 @@ See `.env.example` for the full list. Key variables:
 | `LLM_MODEL` | Model name for the LLM |
 | `LLM_API_KEY` | API key for the LLM endpoint |
 | `AI_OVERVIEW_PROMPT` | Custom prompt template with `{{query}}` and `{{results}}` placeholders |
-| `SSE_MAX_RETRIES` | Max client-side SSE library load retries (default: 30) |
-| `SSE_RETRY_DELAY_MS` | Delay between SSE retry attempts in ms (default: 100) |
 
 ## Running Locally
 
@@ -287,7 +293,7 @@ npm run dev             # watches and restarts on changes
 ## Building for Production
 
 ```bash
-npm run build    # compiles TypeScript
+npm run build    # compiles TypeScript (server + client)
 npm start        # runs the compiled app
 ```
 
@@ -299,23 +305,20 @@ docker compose logs -f    # view logs
 docker compose down       # stop
 ```
 
-## HTML Shell (`public/index.html`)
+## Public Assets
 
-A minimal landing page that serves as the home page (`/`). The search endpoint (`/search`) returns a fully self-contained HTML page with inline CSS, theme switching logic, and the search results UI — no external JS bundle required.
+### `public/index.html`
 
-**Search endpoint shell format:**
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <style>/* theme CSS variables */</style>
-  <script>/* theme switching script */</script>
-  <script src="marked.cdn.js" async></script>
-  <script src="dompurify.cdn.js" async></script>
-  <script>/* SSE client for AI overview */</script>
-</head>
-<body>
-  <!-- Search UI with results + AI overview sidebar -->
-</body>
-</html>
-```
+The HTML shell served by `/` and `/search`. Contains the base structure and links to the client SPA bundle at `/js/app.js`, plus CSS from `public/css/`.
+
+### `public/css/base.css`
+
+Base styles, layout (flexbox with responsive breakpoints), result styling, header, sidebar, thinking block, and dark-aero glassmorphism overrides.
+
+### `public/css/themes.css`
+
+Theme color palettes for gruvbox, tokyonight, and dark-aero as CSS custom properties.
+
+### `opensearch.xml`
+
+OpenSearch discovery document for browser search engine integration, served at `/opensearch`.
