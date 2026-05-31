@@ -50,7 +50,7 @@ The page is a single-page application (SPA) — the HTML contains the shell with
 A complete HTML document with:
 - Sticky header containing the logo, search form, and theme switcher
 - Main content area with search results and result count
-- Right sidebar (600px, sticky) with AI overview section and collapsible thinking block
+- Right sidebar (flexible, up to 600px, sticky) with AI overview section and collapsible thinking block
 - Inline CSS with CSS custom properties for theming
 - Client-side JavaScript bundle at `/js/app.js` that handles rendering, theme switching, and SSE streaming
 - Theme switching with cookie persistence
@@ -107,6 +107,97 @@ data: {}
 
 ---
 
+### `GET /api/search`
+
+Returns search results as JSON. Useful for programmatic integration or when you need raw data instead of the HTML SPA.
+
+**Query Parameters:** Same as `GET /search` (`q`, `category`, `engines`, `language`, `pageno`).
+
+**Response (`application/json`):**
+
+| Field | Type | Description |
+|---|---|---|
+| `query` | string | The executed search query |
+| `results` | SearXNGResult[] | Array of search results |
+| `number_of_results` | number | Number of results returned |
+| `searchParams` | string | Reconstructed query string for pagination |
+| `aiOverviewEnabled` | boolean | `true` if LLM is configured and no errors |
+| `error` | string (nullable) | Error message if search failed |
+
+**Example Response:**
+
+```json
+{
+  "query": "how to fix a leaky faucet",
+  "results": [
+    {
+      "title": "How to Fix a Leaky Faucet - This Old House",
+      "url": "https://www.thisoldhouse.com/plumbing/21035566/how-to-fix-a-leaky-faucet",
+      "content": "A dripping faucet can waste gallons of water...",
+      "engine": "google",
+      "engines": ["google"]
+    }
+  ],
+  "number_of_results": 1,
+  "searchParams": "category=general&language=en",
+  "aiOverviewEnabled": true
+}
+```
+
+---
+
+### `POST /search/cancel`
+
+Cancels an in-flight SSE stream for a given session.
+
+**Request Body (`application/json`):**
+
+| Field | Required | Type | Description |
+|---|---|---|---|
+| `sessionId` | Yes | string | Session ID from the `session` SSE event |
+
+**Example Request:**
+
+```http
+POST /search/cancel
+Content-Type: application/json
+
+{ "sessionId": "abc123-session-id" }
+```
+
+**Response:**
+
+```json
+{ "success": true }
+```
+
+---
+
+### `GET /autocompleter`
+
+Returns search suggestion items from SearXNG's autocompleter endpoint. Used by the client-side autocomplete dropdown.
+
+**Query Parameters:**
+
+| Parameter | Required | Type | Description |
+|---|---|---|---|
+| `q` | Yes | string | Partial query text |
+| `category` | No | string | SearXNG category filter |
+
+**Response (`application/json`):**
+
+| Field | Type | Description |
+|---|---|---|
+| `items` | string[] | Array of suggestion strings |
+
+**Example Response:**
+
+```json
+{ "items": ["how to fix a leaky faucet", "how to fix a leaky faucet washer"] }
+```
+
+---
+
 ## Configuration Endpoints
 
 ### `GET /config`
@@ -123,6 +214,7 @@ Returns the current runtime configuration. Sensitive values (API keys) are retur
 | `llmMaxTokens` | number | Maximum tokens for LLM responses |
 | `llmTemperature` | number | LLM temperature (0–1) |
 | `aiOverviewPrompt` | string | Custom AI overview prompt template |
+| `streamAIOverview` | boolean | Whether to stream AI overview via SSE |
 | `llmApiKey` | null | Always `null` (redacted) |
 | `searxngApiKey` | null | Always `null` (redacted) |
 
@@ -334,7 +426,8 @@ See `.env.example` for the full list.
 | `LLM_API_KEY` | No | `""` | LLM API Bearer key |
 | `LLM_MODEL` | No | `llama3.1-8b-instruct` | Model name for LLM |
 | `LLM_MAX_TOKENS` | No | `1024` | Max tokens for LLM responses |
-| `LLM_TEMPERATURE` | No | `0.7` | LLM temperature (0–1) |
+| `LLM_TEMPERATURE` | No | `0.2` | LLM temperature (0–1) |
+| `STREAM_AI_OVERVIEW` | No | `true` | Whether to stream AI overview via SSE |
 | `AI_OVERVIEW_PROMPT` | No | *(default template)* | Custom prompt with `{{query}}` and `{{results}}` placeholders |
 
 ---
