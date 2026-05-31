@@ -37,6 +37,10 @@ body {
   transition: background 0.3s, color 0.3s;
 }
 
+ul {
+  white-space-collapse: collapse;
+}
+
 @keyframes chunkFadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
