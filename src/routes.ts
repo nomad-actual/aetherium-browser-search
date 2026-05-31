@@ -21,7 +21,7 @@ function cacheKey(q: string, opts: { category?: string; engines?: string; langua
 
 const searxngCache = new Map<string, { results: SearXNGResult[]; timestamp: number }>();
 const CACHE_TTL_MS = 30_000;
-const SSE_UPDATE_INTERVAL_MS = 80;
+const SSE_UPDATE_INTERVAL_MS = 50;
 
 function getCacheEntry(key: string): SearXNGResult[] | undefined {
   const entry = searxngCache.get(key);
@@ -184,7 +184,12 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
             setTimeout(() => {
               pushScheduled = false;
               if (buffer) {
-                stream.push(`event: incremental\ndata: ${escapeHtml(buffer)}\n\n`);
+                stream.push('event: incremental\n');
+                const lines = buffer.split(/\r?\n/);
+                for (const line of lines) {
+                  stream.push(`data: ${line}\n`);
+                }
+                stream.push('\n');
                 lastPush = Date.now();
                 buffer = "";
               }
@@ -205,7 +210,12 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
           );
 
           if (buffer) {
-            stream.push(`event: incremental\ndata: ${escapeHtml(buffer)}\n\n`);
+            stream.push('event: incremental\n');
+            const lines = buffer.split(/\r?\n/);
+            for (const line of lines) {
+              stream.push(`data: ${line}\n`);
+            }
+            stream.push('\n');
             buffer = "";
           }
 

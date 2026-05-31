@@ -38,13 +38,13 @@ body {
 }
 
 @keyframes chunkFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .streaming-chunk {
   display: inline;
-  animation: chunkFadeIn 0.5s ease-out forwards;
+  animation: chunkFadeIn 1.2s ease-in-out forwards;
 }
 
 .header {
@@ -338,7 +338,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--primary);
-  margin-bottom: 10px;
+  margin-bottom: 4px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -368,9 +368,90 @@ body {
 
 .ai-overview p {
   font-size: 14px;
-  line-height: 1.7;
-  white-space: pre-wrap;
+  line-height: 1.6;
   color: var(--text-secondary);
+  margin-top: 0;
+  margin-bottom: 3px;
+}
+
+.ai-overview h1,
+.ai-overview h2,
+.ai-overview h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 5px 0 3px 0;
+  line-height: 1.3;
+}
+
+.ai-overview h1:first-child,
+.ai-overview h2:first-child,
+.ai-overview h3:first-child {
+  margin-top: 0;
+}
+
+.ai-overview code {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  font-size: 12px;
+}
+
+.ai-overview pre {
+  background: var(--input-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 5px 0;
+  overflow-x: auto;
+}
+
+.ai-overview pre code {
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ai-overview blockquote {
+  border-left: 3px solid var(--surface-border);
+  padding: 4px 0 4px 14px;
+  margin: 5px 0;
+  color: var(--text-secondary);
+}
+
+.ai-overview hr {
+  border: none;
+  border-top: 1px solid var(--surface-border);
+  margin: 5px 0;
+}
+
+.ai-overview ul,
+.ai-overview ol {
+  padding-left: 20px;
+  margin: 2px 0;
+}
+
+.ai-overview li {
+  margin-bottom: 0;
+  line-height: 1.4;
+  padding: 1px 0;
+}
+
+.ai-overview a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.ai-overview a:hover {
+  text-decoration: underline;
+}
+
+.ai-overview img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 4px 0;
 }
 
 .ai-loading {
@@ -487,6 +568,11 @@ body {
   border-left: 3px solid var(--primary);
 }
 
+.sidebar-answer :where(p, ul, ol, h1, h2, h3, h4, h5, h6, blockquote, pre, hr, table, figure) {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 .sidebar-answer .ai-overview-label {
   font-size: 11px;
   font-weight: 600;
@@ -518,9 +604,10 @@ body {
 
 .sidebar-answer p {
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.6;
   color: var(--text-secondary);
-  margin-bottom: 12px;
+  margin-top: 0;
+  margin-bottom: 3px;
 }
 
 .sidebar-answer p:last-child {
@@ -533,8 +620,8 @@ body {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
-  margin: 16px 0 8px 0;
-  line-height: 1.4;
+  margin: 5px 0 3px 0;
+  line-height: 1.3;
 }
 
 .sidebar-answer h1:first-child,
@@ -555,8 +642,8 @@ body {
   background: var(--input-bg);
   border: 1px solid var(--surface-border);
   border-radius: 6px;
-  padding: 12px 16px;
-  margin: 12px 0;
+  padding: 10px 14px;
+  margin: 5px 0;
   overflow-x: auto;
 }
 
@@ -570,24 +657,26 @@ body {
 .sidebar-answer blockquote {
   border-left: 3px solid var(--surface-border);
   padding: 4px 0 4px 16px;
-  margin: 12px 0;
+  margin: 5px 0;
   color: var(--text-secondary);
 }
 
 .sidebar-answer hr {
   border: none;
   border-top: 1px solid var(--surface-border);
-  margin: 16px 0;
+  margin: 5px 0;
 }
 
 .sidebar-answer ul,
 .sidebar-answer ol {
   padding-left: 24px;
-  margin: 8px 0;
+  margin: 2px 0;
 }
 
 .sidebar-answer li {
-  margin-bottom: 4px;
+  margin-bottom: 0;
+  line-height: 1.4;
+  padding: 1px 0;
 }
 
 .sidebar-answer a {
@@ -602,7 +691,7 @@ body {
 .sidebar-answer img {
   max-width: 100%;
   border-radius: 6px;
-  margin: 8px 0;
+  margin: 4px 0;
 }
 
 .sidebar-loading {
@@ -1024,9 +1113,12 @@ export function createHtmlShell(
     var thinkingBlock = document.getElementById("thinking-block");
     var mobileSidebarAnswer = document.getElementById("mobile-sidebar-answer");
     var incrementalText = null;
+    var incrementalRawText = "";
     var mobileIncrementalText = null;
+    var mobileIncrementalRawText = "";
     var isStreaming = false;
-    var scrollTimer = null;
+    var scrollTarget = null;
+    var mobileScrollTarget = null;
     sseSource = new EventSource(url);
     sseSource.addEventListener("incremental", function(e) {
       try {
@@ -1037,7 +1129,7 @@ export function createHtmlShell(
           sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
           var container = document.createElement("p");
           container.className = "sidebar-answer-text";
-          container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;max-height:300px;overflow-y:auto;";
+          container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;overflow-y:auto;";
           sidebarAnswer.appendChild(container);
           incrementalText = container;
           if (mobileSidebarAnswer) {
@@ -1048,22 +1140,16 @@ export function createHtmlShell(
           }
         }
         if (incrementalText) {
-          var chunk = document.createElement("span");
-          chunk.className = "streaming-chunk";
-          chunk.textContent = e.data;
-          incrementalText.appendChild(chunk);
-          if (!scrollTimer) {
-            scrollTimer = setTimeout(function() {
-              incrementalText.scrollTop = incrementalText.scrollHeight;
-              scrollTimer = null;
-            }, 50);
-          }
+          incrementalRawText += e.data;
+          if (!scrollTarget) scrollTarget = incrementalText.scrollHeight;
+          else incrementalText.scrollTop = scrollTarget;
+          incrementalText.innerHTML = markdownToHtml(incrementalRawText);
         }
         if (isStreaming && mobileIncrementalText) {
-          var mChunk = document.createElement("span");
-          mChunk.className = "streaming-chunk";
-          mChunk.textContent = e.data;
-          mobileIncrementalText.appendChild(mChunk);
+          mobileIncrementalRawText += e.data;
+          if (!mobileScrollTarget) mobileScrollTarget = mobileIncrementalText.scrollHeight;
+          else mobileIncrementalText.scrollTop = mobileScrollTarget;
+          mobileIncrementalText.innerHTML = markdownToHtml(mobileIncrementalRawText);
         }
       } catch(err) {
         console.error("SSE incremental parse error:", err);
@@ -1083,17 +1169,6 @@ export function createHtmlShell(
     });
     sseSource.addEventListener("overview", function(e) {
       try {
-        var overviewData = JSON.parse(e.data);
-        if (sidebarAnswer) {
-          sidebarAnswer.className = "sidebar-answer";
-          sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview</div>' + markdownToHtml(overviewData.overview);
-          isStreaming = false;
-          incrementalText = null;
-        }
-        if (mobileSidebarAnswer) {
-          mobileSidebarAnswer.className = "sidebar-answer";
-          mobileSidebarAnswer.innerHTML = markdownToHtml(overviewData.overview);
-        }
         if (thinkingBlock) {
           var toggle = thinkingBlock.querySelector(".thinking-toggle");
           if (toggle) toggle.classList.remove("open");
@@ -1101,15 +1176,7 @@ export function createHtmlShell(
           if (tc) tc.classList.remove("open");
         }
       } catch(err) {
-        console.error("SSE parse error:", err);
-        if (sidebarAnswer) {
-          sidebarAnswer.className = "sidebar-answer error";
-          sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>Failed to load AI overview</p>';
-        }
-        if (mobileSidebarAnswer) {
-          mobileSidebarAnswer.className = "sidebar-answer error";
-          mobileSidebarAnswer.innerHTML = '<p>Failed to load AI overview</p>';
-        }
+        console.error("SSE overview error:", err);
       }
       queueMicrotask(function() { sseSource.close(); sseSource = null; });
     });
