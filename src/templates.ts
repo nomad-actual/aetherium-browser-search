@@ -37,6 +37,16 @@ body {
   transition: background 0.3s, color 0.3s;
 }
 
+@keyframes chunkFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.streaming-chunk {
+  display: inline;
+  animation: chunkFadeIn 0.5s ease-out forwards;
+}
+
 .header {
   background: var(--surface);
   border-bottom: 1px solid var(--surface-border);
@@ -1014,7 +1024,9 @@ export function createHtmlShell(
     var thinkingBlock = document.getElementById("thinking-block");
     var mobileSidebarAnswer = document.getElementById("mobile-sidebar-answer");
     var incrementalText = null;
+    var mobileIncrementalText = null;
     var isStreaming = false;
+    var scrollTimer = null;
     sseSource = new EventSource(url);
     sseSource.addEventListener("incremental", function(e) {
       try {
@@ -1025,19 +1037,33 @@ export function createHtmlShell(
           sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
           var container = document.createElement("p");
           container.className = "sidebar-answer-text";
-          container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;";
+          container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;max-height:300px;overflow-y:auto;";
           sidebarAnswer.appendChild(container);
           incrementalText = container;
           if (mobileSidebarAnswer) {
-            mobileSidebarAnswer.innerHTML = '<p style="color:var(--text-secondary);font-size:14px;line-height:1.7;white-space:pre-wrap;" class="mobile-streaming-text"></p>';
+            var mobileContainer = document.createElement("p");
+            mobileContainer.style.cssText = "color:var(--text-secondary);font-size:14px;line-height:1.7;white-space:pre-wrap;max-height:200px;overflow-y:auto;";
+            mobileSidebarAnswer.appendChild(mobileContainer);
+            mobileIncrementalText = mobileContainer;
           }
         }
         if (incrementalText) {
-          incrementalText.textContent += e.data;
+          var chunk = document.createElement("span");
+          chunk.className = "streaming-chunk";
+          chunk.textContent = e.data;
+          incrementalText.appendChild(chunk);
+          if (!scrollTimer) {
+            scrollTimer = setTimeout(function() {
+              incrementalText.scrollTop = incrementalText.scrollHeight;
+              scrollTimer = null;
+            }, 50);
+          }
         }
-        if (isStreaming && mobileSidebarAnswer) {
-          var mobileText = mobileSidebarAnswer.querySelector(".mobile-streaming-text");
-          if (mobileText) mobileText.textContent += e.data;
+        if (isStreaming && mobileIncrementalText) {
+          var mChunk = document.createElement("span");
+          mChunk.className = "streaming-chunk";
+          mChunk.textContent = e.data;
+          mobileIncrementalText.appendChild(mChunk);
         }
       } catch(err) {
         console.error("SSE incremental parse error:", err);
