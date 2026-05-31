@@ -46,10 +46,11 @@ function buildHeader(q: string) {
 
 function buildSidebarLoading() {
   return `
-        <div class="sidebar-loading">
+        <div class="ai-overview-label">Generating AI Overview</div>
+        <p class="ai-loading">
           <span class="spinner">${spinnerSvg}</span>
           Analyzing...
-        </div>
+        </p>
         <button class="ai-cancel" onclick="window.cancelSse()">Cancel</button>`;
 }
 
@@ -60,29 +61,6 @@ function buildSidebarError(error: string) {
 }
 
 function buildSidebarPlaceholder() {
-  return `
-        <div class="ai-overview-label">AI Overview</div>
-        <p style="color: var(--text-muted); font-size: 13px;">AI overview will appear here when available.</p>`;
-}
-
-function buildSidebarLoadingMobile() {
-  return `
-        <div class="ai-overview-label">Generating AI Overview</div>
-        <p class="ai-loading">
-          <span class="spinner">${spinnerSvg}</span>
-          Analyzing search results...
-        </p>
-        <button class="ai-cancel" onclick="window.cancelSse()">Cancel</div>
-        <div class="sidebar-answer" id="mobile-sidebar-answer"></div>`;
-}
-
-function buildSidebarErrorMobile(error: string) {
-  return `
-        <div class="ai-overview-label">AI Overview unavailable</div>
-        <p>${escapeHtml(error)}</p>`;
-}
-
-function buildSidebarPlaceholderMobile() {
   return `
         <div class="ai-overview-label">AI Overview</div>
         <p style="color: var(--text-muted); font-size: 13px;">AI overview will appear here when available.</p>`;
@@ -105,8 +83,9 @@ function buildResultsHtml(results: SearXNGResult[]) {
     if (r.content) {
       html += `<p class="result-snippet">${escapeHtml(r.content)}</p>`;
     }
-    if (r.engine) {
-      html += `<span class="result-engine">${escapeHtml(r.engine)}</span>`;
+    const engineTags = (r.engines?.length ? r.engines : r.engine ? [r.engine] : []).map(e => `<span class="result-engine">${escapeHtml(e)}</span>`).join("");
+    if (engineTags) {
+      html += engineTags;
     }
     html += `
         </article>`;
@@ -121,19 +100,13 @@ export function renderSearchPage(q: string, results: SearXNGResult[], error?: st
     : "";
   const resultsHtml = buildResultsHtml(results);
 
-  const sidebarContent = error ? buildSidebarError(error) : aiLoading ? buildSidebarLoading() : buildSidebarPlaceholder();
-  const mobileContent = error ? buildSidebarErrorMobile(error) : aiLoading ? buildSidebarLoadingMobile() : buildSidebarPlaceholderMobile();
+  const overviewContent = error ? buildSidebarError(error) : aiLoading ? buildSidebarLoading() : buildSidebarPlaceholder();
 
   document.title = `${escapeHtml(q)} - Aetherium Search`;
   document.body.innerHTML = `
   ${buildHeader(q)}
   <main class="content">
-    <section class="ai-overview sidebar-empty" id="ai-overview-placeholder">${mobileContent}</section>
     <div class="content-layout">
-      <div class="content-main">
-        ${resultsCountHtml}
-        ${resultsHtml}
-      </div>
       <aside class="content-sidebar">
         <div class="sidebar-content">
           <div id="thinking-block" class="thinking-block" style="display: none;">
@@ -142,11 +115,15 @@ export function renderSearchPage(q: string, results: SearXNGResult[], error?: st
             </button>
             <div class="thinking-content"></div>
           </div>
-          <div class="sidebar-answer" id="sidebar-answer">
-            ${sidebarContent}
+          <div class="sidebar-answer" id="ai-overview">
+            ${overviewContent}
           </div>
         </div>
       </aside>
+      <div class="content-main">
+        ${resultsCountHtml}
+        ${resultsHtml}
+      </div>
     </div>
   </main>`;
   initTheme();
@@ -200,30 +177,22 @@ export function initSSE(urlParams: URLSearchParams) {
       sseSource.close();
       sseSource = null;
     }
-    const sidebar = document.getElementById("sidebar-answer");
-    if (sidebar) {
-      sidebar.className = "sidebar-answer";
-      sidebar.innerHTML = '<div class="ai-overview-label">AI Overview</div><p style="color: var(--text-muted); font-size: 13px;">Cancelled. Click a result or change your query.</p>';
-    }
-    const placeholder = document.getElementById("ai-overview-placeholder");
-    if (placeholder) {
-      placeholder.innerHTML = '<div class="ai-overview-label">AI Overview</div><p style="color: var(--text-muted); font-size: 13px;">Cancelled.</p>';
+    const overview = document.getElementById("ai-overview");
+    if (overview) {
+      overview.className = "sidebar-answer";
+      overview.innerHTML = '<div class="ai-overview-label">AI Overview</div><p style="color: var(--text-muted); font-size: 13px;">Cancelled.</p>';
     }
     const thinking = document.getElementById("thinking-block");
     if (thinking) thinking.style.display = "none";
   };
 
-  const sidebarAnswer = document.getElementById("sidebar-answer");
+  const aiOverview = document.getElementById("ai-overview");
   const thinkingBlock = document.getElementById("thinking-block");
-  const mobileSidebarAnswer = document.getElementById("mobile-sidebar-answer");
 
   let incrementalText: HTMLElement | null = null;
   let incrementalRawText = "";
-  let mobileIncrementalText: HTMLElement | null = null;
-  let mobileIncrementalRawText = "";
   let isStreaming = false;
   let scrollTarget = 0;
-  let mobileScrollTarget = 0;
   let cancelled = false;
 
   sseSource = new EventSource(url);
@@ -234,23 +203,16 @@ export function initSSE(urlParams: URLSearchParams) {
 
   sseSource.addEventListener("incremental", (e: MessageEvent) => {
     try {
-      if (!sidebarAnswer) return;
+      if (!aiOverview) return;
       if (!isStreaming) {
         isStreaming = true;
-        sidebarAnswer.className = "sidebar-answer";
-        sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
+        aiOverview.className = "sidebar-answer";
+        aiOverview.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
         const container = document.createElement("p");
         container.className = "sidebar-answer-text";
         container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;overflow-y:auto;";
-        sidebarAnswer.appendChild(container);
+        aiOverview.appendChild(container);
         incrementalText = container;
-
-        if (mobileSidebarAnswer) {
-          const mobileContainer = document.createElement("p");
-          mobileContainer.style.cssText = "color:var(--text-secondary);font-size:14px;line-height:1.7;white-space:pre-wrap;max-height:200px;overflow-y:auto;";
-          mobileSidebarAnswer.appendChild(mobileContainer);
-          mobileIncrementalText = mobileContainer;
-        }
       }
 
       if (incrementalText) {
@@ -258,13 +220,6 @@ export function initSSE(urlParams: URLSearchParams) {
         if (!scrollTarget) scrollTarget = incrementalText.scrollHeight;
         else incrementalText.scrollTop = scrollTarget;
         incrementalText.innerHTML = markdownToHtml(incrementalRawText);
-      }
-
-      if (isStreaming && mobileIncrementalText) {
-        mobileIncrementalRawText += e.data;
-        if (!mobileScrollTarget) mobileScrollTarget = mobileIncrementalText.scrollHeight;
-        else mobileIncrementalText.scrollTop = mobileScrollTarget;
-        mobileIncrementalText.innerHTML = markdownToHtml(mobileIncrementalRawText);
       }
     } catch (err) {
       console.error("SSE incremental parse error:", err);
@@ -300,13 +255,9 @@ export function initSSE(urlParams: URLSearchParams) {
 
   sseSource.addEventListener("error", () => {
     if (cancelled || !sseSource || sseSource.readyState === EventSource.CLOSED) return;
-    if (sidebarAnswer) {
-      sidebarAnswer.className = "sidebar-answer error";
-      sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>AI overview unavailable</p>';
-    }
-    if (mobileSidebarAnswer) {
-      mobileSidebarAnswer.className = "sidebar-answer error";
-      mobileSidebarAnswer.innerHTML = '<p>AI overview unavailable</p>';
+    if (aiOverview) {
+      aiOverview.className = "sidebar-answer error";
+      aiOverview.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>AI overview unavailable</p>';
     }
     isStreaming = false;
     incrementalText = null;

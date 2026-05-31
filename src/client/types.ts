@@ -3,5 +3,6 @@ export interface SearXNGResult {
   url: string;
   content?: string;
   engine?: string;
+  engines?: string[];
   parsed_url?: string[];
 }
