@@ -11,6 +11,7 @@ export const envSchema = {
     LLM_MODEL: { type: "string", default: "llama3.1-8b-instruct" },
     LLM_MAX_TOKENS: { type: "string", default: "1024" },
     LLM_TEMPERATURE: { type: "string", default: "0.7" },
+    STREAM_AI_OVERVIEW: { type: "string", default: "true" },
     AI_OVERVIEW_PROMPT: {
       type: "string",
       default: "Based on the following search results, provide a concise, informative overview answering the user's query. Synthesize the key points and cite sources where relevant. Query: {{query}}\n\nResults:\n{{results}}"
@@ -26,6 +27,7 @@ export interface AppConfig {
   llmModel: string;
   llmMaxTokens: number;
   llmTemperature: number;
+  streamAIOverview: boolean;
   aiOverviewPrompt: string;
 }
 
@@ -38,6 +40,7 @@ export function buildConfig(processEnv: NodeJS.ProcessEnv): AppConfig {
     llmModel: processEnv.LLM_MODEL || "llama3.1-8b-instruct",
     llmMaxTokens: parseInt(processEnv.LLM_MAX_TOKENS || "1024", 10),
     llmTemperature: parseFloat(processEnv.LLM_TEMPERATURE || "0.7"),
+    streamAIOverview: processEnv.STREAM_AI_OVERVIEW !== "false",
     aiOverviewPrompt: processEnv.AI_OVERVIEW_PROMPT ||
       "Based on the following search results, provide a concise, informative overview answering the user's query. Synthesize the key points and cite sources where relevant. Query: {{query}}\n\nResults:\n{{results}}"
   };

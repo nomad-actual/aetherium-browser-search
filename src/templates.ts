@@ -1012,7 +1012,37 @@ export function createHtmlShell(
   var setupSSE = function() {
     var sidebarAnswer = document.getElementById("sidebar-answer");
     var thinkingBlock = document.getElementById("thinking-block");
+    var mobileSidebarAnswer = document.getElementById("mobile-sidebar-answer");
+    var incrementalText = null;
+    var isStreaming = false;
     sseSource = new EventSource(url);
+    sseSource.addEventListener("incremental", function(e) {
+      try {
+        if (!sidebarAnswer) return;
+        if (!isStreaming) {
+          isStreaming = true;
+          sidebarAnswer.className = "sidebar-answer";
+          sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
+          var container = document.createElement("p");
+          container.className = "sidebar-answer-text";
+          container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;";
+          sidebarAnswer.appendChild(container);
+          incrementalText = container;
+          if (mobileSidebarAnswer) {
+            mobileSidebarAnswer.innerHTML = '<p style="color:var(--text-secondary);font-size:14px;line-height:1.7;white-space:pre-wrap;" class="mobile-streaming-text"></p>';
+          }
+        }
+        if (incrementalText) {
+          incrementalText.textContent += e.data;
+        }
+        if (isStreaming && mobileSidebarAnswer) {
+          var mobileText = mobileSidebarAnswer.querySelector(".mobile-streaming-text");
+          if (mobileText) mobileText.textContent += e.data;
+        }
+      } catch(err) {
+        console.error("SSE incremental parse error:", err);
+      }
+    });
     sseSource.addEventListener("thinking", function(e) {
       try {
         var data = JSON.parse(e.data);
@@ -1031,6 +1061,12 @@ export function createHtmlShell(
         if (sidebarAnswer) {
           sidebarAnswer.className = "sidebar-answer";
           sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview</div>' + markdownToHtml(overviewData.overview);
+          isStreaming = false;
+          incrementalText = null;
+        }
+        if (mobileSidebarAnswer) {
+          mobileSidebarAnswer.className = "sidebar-answer";
+          mobileSidebarAnswer.innerHTML = markdownToHtml(overviewData.overview);
         }
         if (thinkingBlock) {
           var toggle = thinkingBlock.querySelector(".thinking-toggle");
@@ -1044,6 +1080,10 @@ export function createHtmlShell(
           sidebarAnswer.className = "sidebar-answer error";
           sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>Failed to load AI overview</p>';
         }
+        if (mobileSidebarAnswer) {
+          mobileSidebarAnswer.className = "sidebar-answer error";
+          mobileSidebarAnswer.innerHTML = '<p>Failed to load AI overview</p>';
+        }
       }
       queueMicrotask(function() { sseSource.close(); sseSource = null; });
     });
@@ -1053,6 +1093,12 @@ export function createHtmlShell(
         sidebarAnswer.className = "sidebar-answer error";
         sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>AI overview unavailable</p>';
       }
+      if (mobileSidebarAnswer) {
+        mobileSidebarAnswer.className = "sidebar-answer error";
+        mobileSidebarAnswer.innerHTML = '<p>AI overview unavailable</p>';
+      }
+      isStreaming = false;
+      incrementalText = null;
       sseSource.close();
       sseSource = null;
     });
@@ -1373,19 +1419,20 @@ export function createHtmlShell(
   </header>
 
  <main class="content">
-    <section class="ai-overview sidebar-empty" id="ai-overview-placeholder">${aiOverviewLoading && !aiOverview && !aiOverviewError
-      ? `<div class="ai-overview-label">Generating AI Overview</div>
-          <p class="ai-loading">
-            <span class="spinner">
-              <svg viewBox="0 0 24 24" width="16" height="16">
-                <circle cx="12" cy="12" r="10" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="31.4" stroke-dashoffset="10">
-                  <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
-                </circle>
-              </svg>
-            </span>
-            Analyzing search results...
-          </p>
-          <button class="ai-cancel" onclick="window.cancelSse()">Cancel</button>`
+<section class="ai-overview sidebar-empty" id="ai-overview-placeholder">${aiOverviewLoading && !aiOverview && !aiOverviewError
+       ? `<div class="ai-overview-label">Generating AI Overview</div>
+           <p class="ai-loading">
+             <span class="spinner">
+               <svg viewBox="0 0 24 24" width="16" height="16">
+                 <circle cx="12" cy="12" r="10" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="31.4" stroke-dashoffset="10">
+                   <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                 </circle>
+               </svg>
+             </span>
+             Analyzing search results...
+           </p>
+           <button class="ai-cancel" onclick="window.cancelSse()">Cancel</button>
+           <div class="sidebar-answer" id="mobile-sidebar-answer"></div>`
 : aiOverview
         ? `<div class="ai-overview-label">AI Overview</div>
            <div class="sidebar-answer" id="mobile-sidebar-answer">${markdownToHtml(aiOverview)}</div>`

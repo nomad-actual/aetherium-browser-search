@@ -21,6 +21,7 @@ function cacheKey(q: string, opts: { category?: string; engines?: string; langua
 
 const searxngCache = new Map<string, { results: SearXNGResult[]; timestamp: number }>();
 const CACHE_TTL_MS = 30_000;
+const SSE_UPDATE_INTERVAL_MS = 80;
 
 function getCacheEntry(key: string): SearXNGResult[] | undefined {
   const entry = searxngCache.get(key);
@@ -155,6 +156,10 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
       }
     }
 
+    let lastPush = 0;
+    let buffer = "";
+    let pushScheduled = false;
+
     const stream = new Readable({
       async read() {
         try {
@@ -165,25 +170,59 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
           );
 
           if (!config.llmApiUrl || !results.length) {
-            this.push(`event: error\ndata: {}\n\n`);
-            this.push(null);
+            stream.push(`event: error\ndata: {}\n\n`);
+            stream.push(null);
             return;
           }
 
-          const ai = await getAIOverview(config, q.trim(), results, controller.signal);
-          if (ai.thinking) {
-            this.push(`event: thinking\ndata: ${JSON.stringify({ thinking: ai.thinking })}\n\n`);
+          function schedulePush() {
+            if (pushScheduled) return;
+            pushScheduled = true;
+            const now = Date.now();
+            const elapsed = now - lastPush;
+            const delay = Math.max(0, SSE_UPDATE_INTERVAL_MS - elapsed);
+            setTimeout(() => {
+              pushScheduled = false;
+              if (buffer) {
+                stream.push(`event: incremental\ndata: ${escapeHtml(buffer)}\n\n`);
+                lastPush = Date.now();
+                buffer = "";
+              }
+            }, delay);
           }
-          this.push(`event: overview\ndata: ${JSON.stringify({ overview: ai.overview })}\n\n`);
-          this.push(null);
+
+          const ai = await getAIOverview(
+            config,
+            q.trim(),
+            results,
+            controller.signal,
+            config.streamAIOverview
+              ? (chunk, _partial) => {
+                  buffer += chunk;
+                  schedulePush();
+                }
+              : undefined
+          );
+
+          if (buffer) {
+            stream.push(`event: incremental\ndata: ${escapeHtml(buffer)}\n\n`);
+            buffer = "";
+          }
+
+          if (ai.thinking) {
+            stream.push(`event: thinking\ndata: ${JSON.stringify({ thinking: ai.thinking })}\n\n`);
+          }
+          stream.push(`event: overview\ndata: ${JSON.stringify({ overview: ai.overview })}\n\n`);
+          controller.abort();
+          stream.push(null);
         } catch (err: any) {
-          if (err.name === "AbortError") {
-            this.push(null);
+          if (err.name === "AbortError" || err.name === "TimeoutError") {
+            stream.push(null);
             return;
           }
           console.error("SSE stream error:", err);
-          this.push(`event: error\ndata: {}\n\n`);
-          this.push(null);
+          stream.push(`event: error\ndata: {}\n\n`);
+          stream.push(null);
         }
       }
     });
@@ -198,6 +237,7 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
       llmModel: config.llmModel,
       llmMaxTokens: config.llmMaxTokens,
       llmTemperature: config.llmTemperature,
+      streamAIOverview: config.streamAIOverview,
       aiOverviewPrompt: config.aiOverviewPrompt,
       llmApiKey: config.llmApiKey || null,
       searxngApiKey: config.searxngApiKey || null

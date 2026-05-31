@@ -6,7 +6,8 @@ export async function getAIOverview(
   config: AppConfig,
   query: string,
   results: SearXNGResult[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onChunk?: (text: string, partial: string) => void
 ): Promise<LLMResponse> {
   if (!config.llmApiUrl) {
     throw new Error("LLM_API_URL is not configured");
@@ -92,6 +93,9 @@ export async function getAIOverview(
 
         if (delta?.content) {
           overview += delta.content;
+          if (onChunk) {
+            onChunk(delta.content, overview);
+          }
         }
         if (delta?.reasoning_content) {
           thinking += delta.reasoning_content;
