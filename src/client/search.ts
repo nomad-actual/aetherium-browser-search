@@ -10,7 +10,7 @@ declare global {
   }
 }
 
-const spinnerSvg = `<svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="31.4" stroke-dashoffset="10"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg>`;
+const spinnerSvg = `<svg viewBox="0 0 48 48" width="24" height="24" style="overflow:hidden"><circle class="ping-center" cx="24" cy="24" r="4" fill="var(--primary)"/><circle class="ping-ring ping-ring-1" cx="24" cy="24" r="4" fill="none" stroke="var(--primary)" stroke-width="1.5"/><circle class="ping-ring ping-ring-2" cx="24" cy="24" r="4" fill="none" stroke="var(--primary)" stroke-width="1.5"/></svg>`;
 
 const themeNames = ["gruvbox", "tokyonight", "dark-aero"];
 
@@ -189,8 +189,13 @@ export function initSSE(urlParams: URLSearchParams) {
   const url = `/search/stream?${parts.join("&")}`;
 
   let sseSource: EventSource | null = null;
+  let sseSessionId: string | null = null;
 
   window.cancelSse = function () {
+    cancelled = true;
+    if (sseSessionId) {
+      fetch("/search/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: sseSessionId }) }).catch(() => {});
+    }
     if (sseSource) {
       sseSource.close();
       sseSource = null;
@@ -203,7 +208,6 @@ export function initSSE(urlParams: URLSearchParams) {
     const placeholder = document.getElementById("ai-overview-placeholder");
     if (placeholder) {
       placeholder.innerHTML = '<div class="ai-overview-label">AI Overview</div><p style="color: var(--text-muted); font-size: 13px;">Cancelled.</p>';
-      placeholder.classList.remove("sidebar-empty");
     }
     const thinking = document.getElementById("thinking-block");
     if (thinking) thinking.style.display = "none";
@@ -220,8 +224,13 @@ export function initSSE(urlParams: URLSearchParams) {
   let isStreaming = false;
   let scrollTarget = 0;
   let mobileScrollTarget = 0;
+  let cancelled = false;
 
   sseSource = new EventSource(url);
+
+  sseSource.addEventListener("session", (e: MessageEvent) => {
+    sseSessionId = e.data;
+  });
 
   sseSource.addEventListener("incremental", (e: MessageEvent) => {
     try {
@@ -286,11 +295,11 @@ export function initSSE(urlParams: URLSearchParams) {
     } catch (err) {
       console.error("SSE overview error:", err);
     }
-    queueMicrotask(() => { if (sseSource) { sseSource.close(); sseSource = null; } });
+    queueMicrotask(() => { if (sseSource) { cancelled = true; sseSource.close(); sseSource = null; } });
   });
 
   sseSource.addEventListener("error", () => {
-    if (sseSource && sseSource.readyState === EventSource.CLOSED) return;
+    if (cancelled || !sseSource || sseSource.readyState === EventSource.CLOSED) return;
     if (sidebarAnswer) {
       sidebarAnswer.className = "sidebar-answer error";
       sidebarAnswer.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>AI overview unavailable</p>';
@@ -308,12 +317,13 @@ export function initSSE(urlParams: URLSearchParams) {
     const target = e.target as HTMLElement;
     const result = target.closest("[data-result]");
     if (result && sseSource) {
+      cancelled = true;
       sseSource.close();
       sseSource = null;
     }
   }, true);
 
   window.addEventListener("beforeunload", () => {
-    if (sseSource) sseSource.close();
+    if (sseSource) { cancelled = true; sseSource.close(); }
   });
 }

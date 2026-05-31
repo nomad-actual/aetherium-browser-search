@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Readable } from "node:stream";
 import Fastify, { FastifyInstance } from "fastify";
 import { SearXNGResponse, SearXNGResult } from "../shared/types.js";
@@ -10,6 +11,7 @@ function cacheKey(q: string, opts: { category?: string; engines?: string; langua
 }
 
 const searxngCache = new Map<string, { results: SearXNGResult[]; timestamp: number }>();
+const sseControllers = new Map<string, AbortController>();
 const CACHE_TTL_MS = 30_000;
 const SSE_UPDATE_INTERVAL_MS = 50;
 
@@ -104,6 +106,8 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
     reply.header("Access-Control-Allow-Origin", "*");
 
     const controller = new AbortController();
+    const sessionId = crypto.randomUUID();
+    sseControllers.set(sessionId, controller);
 
     if (shutdownSignal) {
       if (shutdownSignal.aborted) {
@@ -111,18 +115,24 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
       } else {
         shutdownSignal.addEventListener(
           "abort",
-          () => controller.abort(),
+          () => { controller.abort(); sseControllers.delete(sessionId); },
           { once: true }
         );
       }
     }
 
+    reply.header("X-Session-Id", sessionId);
+
     let lastPush = 0;
     let buffer = "";
     let pushScheduled = false;
+    let started = false;
 
     const stream = new Readable({
       async read() {
+        if (started) return;
+        started = true;
+        stream.push(`event: session\ndata: ${sessionId}\n\n`);
         try {
           const { results } = await fetchResults(
             config, q.trim(),
@@ -183,15 +193,18 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
           if (ai.thinking) {
             stream.push(`event: thinking\ndata: ${JSON.stringify({ thinking: ai.thinking })}\n\n`);
           }
-          stream.push(`event: overview\ndata: ${JSON.stringify({ overview: ai.overview })}\n\n`);
-          controller.abort();
-          stream.push(null);
+         stream.push(`event: overview\ndata: ${JSON.stringify({ overview: ai.overview })}\n\n`);
+           sseControllers.delete(sessionId);
+           controller.abort();
+           stream.push(null);
         } catch (err: any) {
-          if (err.name === "AbortError" || err.name === "TimeoutError") {
+          if (err.name === "AbortError" || err.name === "TimeoutError" || controller.signal.aborted) {
+            sseControllers.delete(sessionId);
             stream.push(null);
             return;
           }
           console.error("SSE stream error:", err);
+          sseControllers.delete(sessionId);
           stream.push(`event: error\ndata: {}\n\n`);
           stream.push(null);
         }
@@ -199,6 +212,16 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
     });
 
     return reply.send(stream);
+  });
+
+  app.post<{ Body: { sessionId: string } }>("/search/cancel", async (request, reply) => {
+    const { sessionId } = request.body;
+    const ac = sseControllers.get(sessionId);
+    if (ac) {
+      ac.abort();
+      sseControllers.delete(sessionId);
+    }
+    return reply.send({ success: true });
   });
 
   app.get("/config", async (_request, reply) => {
