@@ -1,4 +1,4 @@
-const THEMES = ["gruvbox", "tokyonight", "dark-aero"] as const;
+const THEMES = ["gruvbox", "tokyonight", "dark-aero", "paper", "midnight"] as const;
 
 function getCookie(name: string): string | null {
   const cookies = document.cookie.split("; ");
@@ -36,8 +36,19 @@ function applyTheme(name: string) {
 }
 
 export function initTheme() {
-  requestAnimationFrame(() => {
-    const stored = getCookie("aetherium-theme") || "gruvbox";
+  requestAnimationFrame(async () => {
+    let defaultTheme = "paper";
+    try {
+      const res = await fetch("/config");
+      if (res.ok) {
+        const cfg = await res.json();
+        if (cfg.defaultTheme && THEMES.includes(cfg.defaultTheme as typeof THEMES[number])) {
+          defaultTheme = cfg.defaultTheme;
+        }
+      }
+    } catch { /* use default */ }
+
+    const stored = getCookie("aetherium-theme") || defaultTheme;
     applyTheme(stored);
 
     document.querySelectorAll<HTMLElement>(".theme-toggle").forEach(btn => {

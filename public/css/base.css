@@ -247,6 +247,8 @@ ul {
 .dropdown-item[data-theme="gruvbox"] { background: #282828; border: 1px solid #504945; }
 .dropdown-item[data-theme="tokyonight"] { background: #1a1b26; border: 1px solid #414868; }
 .dropdown-item[data-theme="dark-aero"] { background: linear-gradient(135deg, #0a0e17, #1a2a4a); border: 1px solid #5ba0e6; }
+.dropdown-item[data-theme="paper"] { background: #292524; border: 1px solid #57534e; }
+.dropdown-item[data-theme="midnight"] { background: #142238; border: 1px solid #1e3a5f; }
 
 
 .content {
@@ -455,6 +457,28 @@ ul {
 .ai-cancel:hover {
   border-color: var(--text-muted);
   color: var(--text);
+}
+
+.research-btn {
+  display: block;
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s;
+}
+
+.research-btn:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary-hover);
 }
 
 .results-count {
@@ -723,6 +747,54 @@ ul {
   letter-spacing: 0.02em;
 }
 
+.results-grid {
+  columns: 1;
+  column-gap: 16px;
+}
+
+.results-grid.columns-2 {
+  columns: 2;
+}
+
+.results-grid.columns-3 {
+  columns: 3;
+}
+
+.results-grid .result {
+  break-inside: avoid;
+  display: inline-block;
+  width: 100%;
+}
+
+.column-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.column-toggle:hover {
+  color: var(--text-secondary);
+  border-color: var(--surface-border);
+  background: var(--surface);
+}
+
+.column-toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
 .empty-state {
   text-align: center;
   padding: 80px 24px;
@@ -750,6 +822,11 @@ ul {
   .content-sidebar { order: -1; width: 100%; position: static; }
   .result { padding: 14px 0; }
   .result-snippet { -webkit-line-clamp: 3; }
+  .results-grid,
+  .results-grid.columns-2,
+  .results-grid.columns-3 {
+    columns: 1;
+  }
 }
 
 @media (min-width: 961px) {
@@ -924,4 +1001,74 @@ body[data-theme="dark-aero"] .empty-state {
   -webkit-backdrop-filter: blur(8px);
   border-radius: 12px;
   padding: 80px 24px;
+}
+
+body[data-theme="paper"] .result {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+body[data-theme="paper"] .result:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+body[data-theme="paper"] .result-url {
+  color: #78716c;
+}
+
+body[data-theme="paper"] .result-title a {
+  color: #ddb88b;
+}
+
+body[data-theme="paper"] .result-title a:hover {
+  color: #d4a574;
+}
+
+body[data-theme="paper"] .result-snippet {
+  color: #a8a29e;
+}
+
+body[data-theme="paper"] .result-engine {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border: 1px solid var(--surface-border);
+  color: #78716c;
+}
+
+body[data-theme="midnight"] .result {
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+body[data-theme="midnight"] .result:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+body[data-theme="midnight"] .result-url {
+  color: #3a5a7c;
+}
+
+body[data-theme="midnight"] .result-title a {
+  color: #7bbcd4;
+}
+
+body[data-theme="midnight"] .result-title a:hover {
+  color: #5b9fb8;
+}
+
+body[data-theme="midnight"] .result-snippet {
+  color: #8fa8c8;
+}
+
+body[data-theme="midnight"] .result-engine {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border: 1px solid var(--surface-border);
+  color: #3a5a7c;
 }

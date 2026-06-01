@@ -58,7 +58,17 @@ export const envSchema = {
     AI_OVERVIEW_PROMPT: {
       type: "string",
       default: "Based on the following search results, provide a concise, informative overview answering the user's query. Synthesize the key points and cite sources where relevant. Query: {{query}}\n\nResults:\n{{results}}"
-    }
+    },
+    RESEARCH_MODE: { type: "string", default: "false" },
+    DEFAULT_THEME: { type: "string", default: "paper" },
+    SCRAPER_TIMEOUT_MS: { type: "string", default: "15000" },
+    SCRAPER_CONTENT_LIMIT: { type: "string", default: "8000" },
+    SCRAPER_CONCURRENCY: { type: "string", default: "3" },
+    SCRAPER_REDDIT_MAX_COMMENTS: { type: "string", default: "10" },
+    SCRAPER_REDDIT_MAX_DEPTH: { type: "string", default: "3" },
+    SCRAPER_REDDIT_COMMENT_MAX_LEN: { type: "string", default: "2000" },
+    SCRAPER_REDDIT_IGNORE_COMMENTS: { type: "string", default: "false" },
+    SCRAPER_BASICHTML_MIN_READABLE: { type: "string", default: "500" }
   }
 };
 
@@ -72,6 +82,16 @@ export interface AppConfig {
   llmTemperature: number;
   streamAIOverview: boolean;
   aiOverviewPrompt: string;
+  researchMode: boolean;
+  defaultTheme: string;
+  scraperTimeoutMs: number;
+  scraperContentLimit: number;
+  scraperConcurrency: number;
+  scraperRedditMaxComments: number;
+  scraperRedditMaxDepth: number;
+  scraperRedditCommentMaxLen: number;
+  scraperRedditIgnoreComments: boolean;
+  scraperBasicHtmlMinReadable: number;
 }
 
 export function buildConfig(processEnv: NodeJS.ProcessEnv): AppConfig {
@@ -84,6 +104,16 @@ export function buildConfig(processEnv: NodeJS.ProcessEnv): AppConfig {
     llmMaxTokens: parseInt(processEnv.LLM_MAX_TOKENS || "1024", 10),
     llmTemperature: parseFloat(processEnv.LLM_TEMPERATURE || "0.7"),
     streamAIOverview: processEnv.STREAM_AI_OVERVIEW !== "false",
-    aiOverviewPrompt: processEnv.AI_OVERVIEW_PROMPT || defaultPrompt
+    aiOverviewPrompt: processEnv.AI_OVERVIEW_PROMPT || defaultPrompt,
+    researchMode: processEnv.RESEARCH_MODE === "true",
+    defaultTheme: processEnv.DEFAULT_THEME || "paper",
+    scraperTimeoutMs: parseInt(processEnv.SCRAPER_TIMEOUT_MS || "15000", 10),
+    scraperContentLimit: parseInt(processEnv.SCRAPER_CONTENT_LIMIT || "8000", 10),
+    scraperConcurrency: parseInt(processEnv.SCRAPER_CONCURRENCY || "3", 10),
+    scraperRedditMaxComments: parseInt(processEnv.SCRAPER_REDDIT_MAX_COMMENTS || "10", 10),
+    scraperRedditMaxDepth: parseInt(processEnv.SCRAPER_REDDIT_MAX_DEPTH || "3", 10),
+    scraperRedditCommentMaxLen: parseInt(processEnv.SCRAPER_REDDIT_COMMENT_MAX_LEN || "2000", 10),
+    scraperRedditIgnoreComments: processEnv.SCRAPER_REDDIT_IGNORE_COMMENTS === "true",
+    scraperBasicHtmlMinReadable: parseInt(processEnv.SCRAPER_BASICHTML_MIN_READABLE || "500", 10)
   };
 }

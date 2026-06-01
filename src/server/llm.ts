@@ -7,7 +7,8 @@ export async function getAIOverview(
   query: string,
   results: SearXNGResult[],
   signal?: AbortSignal,
-  onChunk?: (text: string, partial: string) => void
+  onChunk?: (text: string, partial: string) => void,
+  customPrompt?: string
 ): Promise<LLMResponse> {
   if (!config.llmApiUrl) {
     throw new Error("LLM_API_URL is not configured");
@@ -16,7 +17,7 @@ export async function getAIOverview(
   const systemPrompt =
     "You are a helpful assistant that provides concise, accurate overviews based on search results. Always cite sources when possible. If the results don't contain enough information to answer the query, say so clearly.";
 
-  const userMessage = interpolatePrompt(config.aiOverviewPrompt, query, results);
+  const userMessage = customPrompt || interpolatePrompt(config.aiOverviewPrompt, query, results);
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
