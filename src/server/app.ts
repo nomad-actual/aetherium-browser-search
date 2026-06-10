@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { buildConfig, envSchema } from "./config.js";
 import { buildRoutes } from "./routes.js";
+import PlaywrightScraper from "./webscrapers/PlaywrightScraper.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -60,6 +61,9 @@ async function bootstrap() {
 
   server.addHook("onClose", async () => {
     shutdown.abort();
+    if (config.scraperPlaywrightEnabled) {
+      await PlaywrightScraper.close();
+    }
     await new Promise(res => setTimeout(res, 1000));
   });
 
@@ -98,6 +102,10 @@ async function bootstrap() {
   });
 
   buildRoutes(server, config, shutdown.signal);
+
+  if (config.scraperPlaywrightEnabled) {
+    await PlaywrightScraper.init();
+  }
 
   const host = process.env.HOST || "0.0.0.0";
   const port = parseInt(process.env.PORT || "3000", 10);

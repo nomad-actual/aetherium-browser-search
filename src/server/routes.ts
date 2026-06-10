@@ -114,6 +114,10 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
       basicHtmlReader: {
         minReadableLength: config.scraperBasicHtmlMinReadable,
       },
+      playwright: {
+        enabled: config.scraperPlaywrightEnabled,
+        timeoutMs: config.scraperPlaywrightTimeoutMs,
+      },
     };
 
     const controller = new AbortController();

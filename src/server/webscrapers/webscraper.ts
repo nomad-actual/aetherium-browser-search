@@ -1,17 +1,19 @@
 import logger from "../logger.js";
 import BasicHtmlScraper from "./BasicHtmlScraper.js";
-import RedditScraper from "./RedditScraper.js";
+import PlaywrightScraper from "./PlaywrightScraper.js";
 import type { ScrapedContent, IScraper, ScraperConfig } from "./IScraper.js";
 
-function getScrapers(url: string): IScraper[] {
-  return [
-    new RedditScraper(),
-    new BasicHtmlScraper()
-  ].filter((scraper) => scraper.shouldAttempt(url));
+function getScrapers(url: string, config: ScraperConfig): IScraper[] {
+  const scrapers: IScraper[] = [];
+  if (config.playwright?.enabled) {
+    scrapers.push(new PlaywrightScraper());
+  }
+  scrapers.push(new BasicHtmlScraper());
+  return scrapers.filter((s) => s.shouldAttempt(url));
 }
 
 async function scrapeOne(url: string, config: ScraperConfig, signal: AbortSignal): Promise<ScrapedContent | null> {
-  const scrapers = getScrapers(url);
+  const scrapers = getScrapers(url, config);
 
   if (scrapers.length === 0) {
     logger.debug(`[Scraper] No scrapers matched for ${url}`);

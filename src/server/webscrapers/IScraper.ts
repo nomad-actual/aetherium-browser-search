@@ -46,4 +46,8 @@ export interface ScraperConfig {
   basicHtmlReader: {
     minReadableLength: number;
   };
+  playwright?: {
+    enabled: boolean;
+    timeoutMs: number;
+  };
 }

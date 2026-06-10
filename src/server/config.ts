@@ -68,7 +68,9 @@ export const envSchema = {
     SCRAPER_REDDIT_MAX_DEPTH: { type: "string", default: "3" },
     SCRAPER_REDDIT_COMMENT_MAX_LEN: { type: "string", default: "2000" },
     SCRAPER_REDDIT_IGNORE_COMMENTS: { type: "string", default: "false" },
-    SCRAPER_BASICHTML_MIN_READABLE: { type: "string", default: "500" }
+    SCRAPER_BASICHTML_MIN_READABLE: { type: "string", default: "500" },
+    SCRAPER_PLAYWRIGHT_ENABLED: { type: "string", default: "true" },
+    SCRAPER_PLAYWRIGHT_TIMEOUT_MS: { type: "string", default: "15000" },
   }
 };
 
@@ -92,6 +94,8 @@ export interface AppConfig {
   scraperRedditCommentMaxLen: number;
   scraperRedditIgnoreComments: boolean;
   scraperBasicHtmlMinReadable: number;
+  scraperPlaywrightEnabled: boolean;
+  scraperPlaywrightTimeoutMs: number;
 }
 
 export function buildConfig(processEnv: NodeJS.ProcessEnv): AppConfig {
@@ -114,6 +118,8 @@ export function buildConfig(processEnv: NodeJS.ProcessEnv): AppConfig {
     scraperRedditMaxDepth: parseInt(processEnv.SCRAPER_REDDIT_MAX_DEPTH || "3", 10),
     scraperRedditCommentMaxLen: parseInt(processEnv.SCRAPER_REDDIT_COMMENT_MAX_LEN || "2000", 10),
     scraperRedditIgnoreComments: processEnv.SCRAPER_REDDIT_IGNORE_COMMENTS === "true",
-    scraperBasicHtmlMinReadable: parseInt(processEnv.SCRAPER_BASICHTML_MIN_READABLE || "500", 10)
+    scraperBasicHtmlMinReadable: parseInt(processEnv.SCRAPER_BASICHTML_MIN_READABLE || "500", 10),
+    scraperPlaywrightEnabled: processEnv.SCRAPER_PLAYWRIGHT_ENABLED !== "false",
+    scraperPlaywrightTimeoutMs: parseInt(processEnv.SCRAPER_PLAYWRIGHT_TIMEOUT_MS || "15000", 10),
   };
 }
