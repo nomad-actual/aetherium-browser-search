@@ -476,16 +476,16 @@ function buildResearchPanel(results: SearXNGResult[]) {
 
   return `
     <div class="research-panel" id="research-panel">
-      <div class="research-panel-inner">
-        <div class="research-panel-header">
-          <div class="research-panel-title">
-            <span class="research-panel-icon"></span>
-            <span id="research-label">Research Mode</span>
-          </div>
-          <button class="research-exit-btn" onclick="window.exitResearch()" title="Exit research mode">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          </button>
+      <div class="research-panel-header">
+        <div class="research-panel-title">
+          <span class="research-panel-icon"></span>
+          <span id="research-label">Research Mode</span>
         </div>
+        <button class="research-exit-btn" onclick="window.exitResearch()" title="Exit research mode">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="research-panel-scroll" id="research-panel-scroll">
         <div id="research-progress-section" class="research-progress-section">
           <div class="research-progress-header">
             <span class="spinner">${spinnerSvg}</span>
@@ -516,9 +516,9 @@ function exitResearchPanel() {
   panel.classList.add("exiting");
   const layout = document.querySelector(".content-layout") as HTMLElement | null;
   const sidebar = document.querySelector(".content-sidebar") as HTMLElement | null;
-  const main = document.querySelector(".content-main") as HTMLElement | null;
+  const content = document.querySelector("main.content") as HTMLElement | null;
   if (sidebar) sidebar.style.display = "";
-  if (main) main.style.display = "";
+  if (content) content.classList.remove("research-active");
   if (layout) layout.classList.remove("research-active");
   setTimeout(() => {
     panel.remove();
@@ -549,18 +549,18 @@ window.startResearch = async function () {
   const layout = document.querySelector(".content-layout") as HTMLElement | null;
   const sidebar = document.querySelector(".content-sidebar") as HTMLElement | null;
   const main = document.querySelector(".content-main") as HTMLElement | null;
+  const content = document.querySelector("main.content") as HTMLElement | null;
 
-  document.body.insertAdjacentHTML("beforeend", buildResearchPanel(window.currentResults));
+  if (layout) {
+    layout.insertAdjacentHTML("afterbegin", buildResearchPanel(window.currentResults));
+  }
 
   requestAnimationFrame(() => {
+    if (content) content.classList.add("research-active");
     if (layout) layout.classList.add("research-active");
     const panel = document.getElementById("research-panel");
     if (panel) panel.classList.add("entering");
     if (sidebar) sidebar.style.display = "none";
-    if (main) {
-      main.style.display = "block";
-      main.style.opacity = "1";
-    }
   });
 
   const params = new URLSearchParams(window.location.search);

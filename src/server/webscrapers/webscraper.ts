@@ -14,7 +14,7 @@ function getScrapers(url: string, config: ScraperConfig): IScraper[] {
 
 const PER_SITE_TIMEOUT_MS = 5_000;
 
-async function scrapeOne(url: string, config: ScraperConfig, signal: AbortSignal): Promise<ScrapedContent | null> {
+async function scrapeOne(url: string, config: ScraperConfig, totalSignal: AbortSignal): Promise<ScrapedContent | null> {
   const scrapers = getScrapers(url, config);
 
   if (scrapers.length === 0) {
@@ -22,25 +22,19 @@ async function scrapeOne(url: string, config: ScraperConfig, signal: AbortSignal
     return null;
   }
 
-  const perSiteController = new AbortController();
-  const perSiteTimer = setTimeout(() => perSiteController.abort(), PER_SITE_TIMEOUT_MS);
+  const perSiteTimeout = AbortSignal.timeout(PER_SITE_TIMEOUT_MS);
+  const combinedSignal = AbortSignal.any([perSiteTimeout, totalSignal]);
 
-  if (signal) {
-    signal.addEventListener("abort", () => { clearTimeout(perSiteTimer); perSiteController.abort(); }, { once: true });
-  }
-
-  const perSiteSignal = perSiteController.signal;
   const startTime = Date.now();
 
   for (const scraper of scrapers) {
-    if (perSiteSignal.aborted) break;
+    if (combinedSignal.aborted) break;
     logger.debug(`[Scraper] Attempting ${scraper.constructor.name} on ${url}`);
 
     try {
-      const content = await scraper.scrape(url, config, perSiteSignal);
+      const content = await scraper.scrape(url, config, combinedSignal);
 
       if (content) {
-        clearTimeout(perSiteTimer);
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
         logger.info(`[Scraper] Content found using ${scraper.constructor.name} (${duration}s)`);
         return content;
@@ -50,7 +44,6 @@ async function scrapeOne(url: string, config: ScraperConfig, signal: AbortSignal
     }
   }
 
-  clearTimeout(perSiteTimer);
   logger.warn(`[Scraper] No content found for ${url}`);
   return null;
 }
