@@ -4,9 +4,10 @@ import Fastify, { FastifyInstance } from "fastify";
 import { SearXNGResponse, SearXNGResult } from "../shared/types.js";
 import { AppConfig } from "./config.js";
 import { getAIOverview } from "./llm.js";
-import { buildSearXNGUrl, buildAutocompleterUrl, getSearchHeaders, interpolatePrompt } from "./searxng.js";
+import { buildSearXNGUrl, buildAutocompleterUrl, getSearchHeaders, interpolatePrompt, interpolateResearchPrompt } from "./searxng.js";
 import { doWebScrape } from "./webscrapers/webscraper.js";
 import type { ScrapedContent, ScraperConfig } from "./webscrapers/IScraper.js";
+import logger from "./logger.js";
 
 function cacheKey(q: string, opts: { category?: string; engines?: string; language?: string; pageno?: string }): string {
   return `${q}|${opts.category || ""}|${opts.engines || ""}|${opts.language || ""}|${opts.pageno || ""}`;
@@ -90,12 +91,13 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
       searchParams: buildSearchParamsString({ category, engines, language, pageno }),
       aiOverviewEnabled: !!config.llmApiUrl && !error,
       researchMode: config.researchMode,
+      researchMaxSources: config.researchMaxSources,
       error
     });
   });
 
-  app.post<{ Body: { urls: string[] } }>("/api/scrape", async (request, reply) => {
-    const { urls } = request.body;
+  app.post<{ Body: { urls: string[]; query?: string } }>("/api/scrape", async (request, reply) => {
+    const { urls, query } = request.body;
 
     if (!urls || !Array.isArray(urls) || urls.length === 0) {
       return reply.code(400).send({ error: "urls array is required and must not be empty" });
@@ -105,6 +107,7 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
       timeout: config.scraperTimeoutMs,
       contentLimit: config.scraperContentLimit,
       concurrency: config.scraperConcurrency,
+      query: query || undefined,
       reddit: {
         maxTopLevelComments: config.scraperRedditMaxComments,
         maxCommentDepth: config.scraperRedditMaxDepth,
@@ -221,57 +224,33 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
             if (scrapedContentId) {
               const scraped = scrapedContentStore.get(scrapedContentId);
               if (scraped && scraped.length > 0) {
-                const resultsText = results
-                  .slice(0, 10)
-                  .map((r, i) => `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.content || "No snippet"}`)
-                  .join("\n\n");
-
                 const scrapedText = scraped
                   .map(s => `Source: ${s.title}\nURL: ${s.metadata.url}\nContent:\n${s.content}`)
                   .join("\n\n---\n\n");
 
-                customPrompt = `
-You are an expert research synthesizer. Analyze the provided search results and scraped web page content to generate a comprehensive, deeply informed overview.
-
-INSTRUCTIONS:
-1. Begin with a brief 1-5 word **Query Intent:** phrase.
-2. Organize findings under clear thematic headings.
-3. Use scraped content to provide detailed, specific information beyond the snippets.
-4. Place visual citation blocks beneath each section with clickable links to source domains.
-5. Maintain a neutral, encyclopedic tone. No introductions or conclusions.
-6. Keep each point to 1-3 concise sentences.
-
-OUTPUT FORMAT:
-**Query Intent:** [phrase]
-
-**Category:** [Summary with details from scraped content.]
-- [domain.com](url)
-
-QUERY:
-${q.trim()}
-
-SEARCH RESULTS (snippets):
-${resultsText}
-
-SCRAPED CONTENT (full page text from top results):
-${scrapedText}
-`.trim();
+                customPrompt = interpolateResearchPrompt(
+                  config.researchPrompt,
+                  q.trim(),
+                  results,
+                  scrapedText
+                );
               }
             }
 
-           const ai = await getAIOverview(
-             config,
-             q.trim(),
-             results,
-             controller.signal,
-             config.streamAIOverview
-               ? (chunk, _partial) => {
-                   buffer += chunk;
-                   schedulePush();
-                 }
-               : undefined,
-             customPrompt
-           );
+          const ai = await getAIOverview(
+              config,
+              q.trim(),
+              results,
+              controller.signal,
+              config.streamAIOverview
+                ? (chunk, _partial) => {
+                    buffer += chunk;
+                    schedulePush();
+                  }
+                : undefined,
+              customPrompt,
+              customPrompt ? 120000 : undefined
+            );
 
           if (buffer) {
             stream.push('event: incremental\n');
@@ -307,6 +286,184 @@ ${scrapedText}
     return reply.send(stream);
   });
 
+  app.get<{
+    Querystring: { q: string; category?: string; engines?: string; language?: string; pageno?: string };
+  }>("/research/stream", async (request, reply) => {
+    const { q, category, engines, language, pageno } = request.query;
+
+    if (!q || !q.trim()) {
+      return reply.code(400).send({ error: "Query parameter 'q' is required" });
+    }
+
+    if (!config.llmApiUrl) {
+      return reply.code(503).send({ error: "LLM API not configured" });
+    }
+
+    reply.header("Content-Type", "text/event-stream");
+    reply.header("Cache-Control", "no-cache");
+    reply.header("Connection", "keep-alive");
+    reply.header("X-Accel-Buffering", "no");
+    reply.header("Access-Control-Allow-Origin", "*");
+
+    const controller = new AbortController();
+    const sessionId = crypto.randomUUID();
+    sseControllers.set(sessionId, controller);
+
+    if (shutdownSignal) {
+      if (shutdownSignal.aborted) {
+        controller.abort();
+      } else {
+        shutdownSignal.addEventListener(
+          "abort",
+          () => { controller.abort(); sseControllers.delete(sessionId); },
+          { once: true }
+        );
+      }
+    }
+
+    reply.header("X-Session-Id", sessionId);
+
+    let lastPush = 0;
+    let buffer = "";
+    let pushScheduled = false;
+    let started = false;
+
+    function schedulePush() {
+      if (pushScheduled) return;
+      pushScheduled = true;
+      const delay = Math.max(0, SSE_UPDATE_INTERVAL_MS - (Date.now() - lastPush));
+      setTimeout(() => {
+        pushScheduled = false;
+        if (buffer) {
+          stream.push('event: incremental\n');
+          for (const line of buffer.split(/\r?\n/)) stream.push(`data: ${line}\n`);
+          stream.push('\n');
+          lastPush = Date.now();
+          buffer = "";
+        }
+      }, delay);
+    }
+
+    function flushBuffer() {
+      if (buffer) {
+        stream.push('event: incremental\n');
+        for (const line of buffer.split(/\r?\n/)) stream.push(`data: ${line}\n`);
+        stream.push('\n');
+        buffer = "";
+      }
+    }
+
+    const stream = new Readable({
+      async read() {
+        if (started) return;
+        started = true;
+        stream.push(`event: session\ndata: ${sessionId}\n\n`);
+        try {
+          const { results } = await fetchResults(
+            config, q.trim(),
+            { category, engines, language, pageno },
+            controller.signal
+          );
+
+          if (!results.length) {
+            stream.push(`event: error\ndata: {}\n\n`);
+            stream.push(null);
+            sseControllers.delete(sessionId);
+            return;
+          }
+
+          // Collect unique URLs for background scraping
+          const seen = new Set<string>();
+          const scrapeUrls: string[] = [];
+          for (const r of results) {
+            try {
+              const u = new URL(r.url);
+              const key = `${u.hostname.replace(/^(?:www|m|mobile)\./, "")}${u.pathname.replace(/\/+$/, "") || "/"}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                scrapeUrls.push(r.url);
+              }
+            } catch { /* skip invalid URLs */ }
+            if (scrapeUrls.length >= config.researchMaxSources) break;
+          }
+
+          // Research endpoint: scrape sources, then produce enhanced overview
+          // (Phase 1 basic overview is already shown by /search/stream)
+          const keepalive = setInterval(() => stream.push(': keepalive\n\n'), 15_000);
+
+          const scraperConfig: ScraperConfig = {
+            timeout: config.scraperTimeoutMs,
+            contentLimit: config.scraperContentLimit,
+            concurrency: config.scraperConcurrency,
+            query: q.trim(),
+            reddit: {
+              maxTopLevelComments: config.scraperRedditMaxComments,
+              maxCommentDepth: config.scraperRedditMaxDepth,
+              commentMaxContent: config.scraperRedditCommentMaxLen,
+              ignoreComments: config.scraperRedditIgnoreComments,
+            },
+            basicHtmlReader: { minReadableLength: config.scraperBasicHtmlMinReadable },
+            playwright: {
+              enabled: config.scraperPlaywrightEnabled,
+              timeoutMs: config.scraperPlaywrightTimeoutMs,
+            },
+          };
+          const scrapeCtrl = new AbortController();
+          const maxMs = Math.min(scrapeUrls.length * 10_000, 30_000);
+          setTimeout(() => scrapeCtrl.abort(), maxMs);
+          const scraped = await doWebScrape(scrapeUrls, scraperConfig, AbortSignal.any([controller.signal, scrapeCtrl.signal])).catch(() => []);
+          scrapeCtrl.abort();
+          clearInterval(keepalive);
+
+          if (scraped.length > 0 && !controller.signal.aborted) {
+            stream.push(`event: research-update\ndata: {}\n\n`);
+
+            const scrapedText = scraped
+              .map(s => `Source: ${s.title}\nURL: ${s.metadata.url}\nContent:\n${s.content}`)
+              .join("\n\n---\n\n");
+
+            const customPrompt = interpolateResearchPrompt(
+              config.researchPrompt,
+              q.trim(),
+              results,
+              scrapedText
+            );
+
+            const ai2 = await getAIOverview(
+              config, q.trim(), results, controller.signal,
+              config.streamAIOverview ? (chunk) => { buffer += chunk; schedulePush(); } : undefined,
+              customPrompt,
+              120000
+            );
+
+            flushBuffer();
+
+            if (ai2.thinking) {
+              stream.push(`event: thinking\ndata: ${JSON.stringify({ thinking: ai2.thinking })}\n\n`);
+            }
+            stream.push(`event: overview\ndata: ${JSON.stringify({ overview: ai2.overview })}\n\n`);
+          }
+
+          sseControllers.delete(sessionId);
+          controller.abort();
+          stream.push(null);
+        } catch (err: any) {
+          if (err.name === "AbortError" || err.name === "TimeoutError" || controller.signal.aborted) {
+            sseControllers.delete(sessionId);
+            stream.push(null);
+            return;
+          }
+          logger.error(`Research stream error: ${err.message}`);
+          sseControllers.delete(sessionId);
+          stream.push(`event: error\ndata: {}\n\n`);
+          stream.push(null);
+        }
+      }
+    });
+
+    return reply.send(stream);
+  });
+
   app.post<{ Body: { sessionId: string } }>("/search/cancel", async (request, reply) => {
     const { sessionId } = request.body;
     const ac = sseControllers.get(sessionId);
@@ -327,6 +484,8 @@ ${scrapedText}
       streamAIOverview: config.streamAIOverview,
       aiOverviewPrompt: config.aiOverviewPrompt,
       researchMode: config.researchMode,
+      researchMaxSources: config.researchMaxSources,
+      researchPrompt: config.researchPrompt,
       defaultTheme: config.defaultTheme,
       scraperTimeoutMs: config.scraperTimeoutMs,
       scraperContentLimit: config.scraperContentLimit,

@@ -63,3 +63,22 @@ export function interpolatePrompt(
     .replace(/{{query}}/g, query)
     .replace(/{{results}}/g, resultsText);
 }
+
+export function interpolateResearchPrompt(
+  prompt: string,
+  query: string,
+  results: SearXNGResult[],
+  scrapedText: string
+): string {
+  const resultsText = results
+    .slice(0, 10)
+    .map(
+      (r, i) =>
+        `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.content || "No snippet available"}`
+    )
+    .join("\n\n");
+  return prompt
+    .replace(/{{query}}/g, query)
+    .replace(/{{results}}/g, resultsText)
+    .replace(/{{scrapedContent}}/g, scrapedText);
+}

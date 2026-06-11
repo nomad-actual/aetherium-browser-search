@@ -9,6 +9,7 @@ declare global {
     cancelSse: () => void;
     startResearch: () => void;
     researchMode: boolean;
+    researchMaxSources: number;
     currentQuery: string;
     currentResults: SearXNGResult[];
     urlParams: URLSearchParams;
@@ -146,7 +147,7 @@ function buildResultsHtml(results: SearXNGResult[], columnCount: number) {
   return html;
 }
 
-export function renderSearchPage(q: string, results: SearXNGResult[], error?: string, _category?: string, researchMode?: boolean) {
+export function renderSearchPage(q: string, results: SearXNGResult[], error?: string, _category?: string, researchMode?: boolean, researchMaxSources?: number) {
   const aiLoading = !error;
   const resultsCountHtml = results.length > 0
     ? `<div class="results-count">${results.length} result${results.length !== 1 ? "s" : ""} for "${escapeHtml(q)}"</div>`
@@ -161,6 +162,7 @@ export function renderSearchPage(q: string, results: SearXNGResult[], error?: st
   window.currentQuery = q;
   window.currentResults = results;
   window.researchMode = !!researchMode;
+  window.researchMaxSources = researchMaxSources ?? 6;
   window.urlParams = new URLSearchParams(window.location.search);
   document.body.innerHTML = `
   ${buildHeader(q)}
@@ -226,13 +228,15 @@ export function renderHome() {
   initColumnToggle(columnCount);
 }
 
-export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string) {
+export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, isResearch?: boolean) {
   const q = urlParams.get("q")!;
   const parts: string[] = [];
   for (const [key, value] of urlParams.entries()) {
     parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
   }
-  let url = `/search/stream?${parts.join("&")}`;
+  let url = isResearch
+    ? `/research/stream?${parts.join("&")}`
+    : `/search/stream?${parts.join("&")}`;
   if (scrapedContentId) {
     url += `&scrapedContentId=${encodeURIComponent(scrapedContentId)}`;
   }
@@ -266,6 +270,7 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string) {
   let isStreaming = false;
   let scrollTarget = 0;
   let cancelled = false;
+  let overviewCount = 0;
 
   sseSource = new EventSource(url);
 
@@ -279,10 +284,18 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string) {
       if (!isStreaming) {
         isStreaming = true;
         aiOverview.className = "sidebar-answer";
-        aiOverview.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
+        if (!isResearch) {
+          aiOverview.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
+        } else {
+          // Research mode: remove research spinner + button, keep existing content
+          const spinner = aiOverview.querySelector(".research-spinner");
+          if (spinner) spinner.remove();
+          const btn = aiOverview.querySelector(".research-btn");
+          if (btn) btn.remove();
+        }
         const container = document.createElement("p");
         container.className = "sidebar-answer-text";
-        container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;overflow-y:auto;";
+        container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;";
         aiOverview.appendChild(container);
         incrementalText = container;
       }
@@ -311,7 +324,25 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string) {
     }
   });
 
+  sseSource.addEventListener("research-update", () => {
+    if (!isResearch || !aiOverview) return;
+    const thinking = document.getElementById("thinking-block");
+    if (thinking) {
+      thinking.style.display = "none";
+      const toggle = thinking.querySelector(".thinking-toggle");
+      if (toggle) toggle.classList.remove("open");
+      const tc = thinking.querySelector(".thinking-content");
+      if (tc) tc.classList.remove("open");
+    }
+    aiOverview.innerHTML = '<div class="ai-overview-label">Enhancing Overview...</div>';
+    isStreaming = false;
+    incrementalText = null;
+    incrementalRawText = "";
+    scrollTarget = 0;
+  });
+
   sseSource.addEventListener("overview", () => {
+    overviewCount++;
     try {
       if (thinkingBlock) {
         const toggle = thinkingBlock.querySelector(".thinking-toggle");
@@ -322,7 +353,14 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string) {
     } catch (err) {
       console.error("SSE overview error:", err);
     }
-    if (window.researchMode && aiOverview) {
+    // Research complete: reset label
+    if (isResearch) {
+      const btn = aiOverview?.querySelector(".research-btn");
+      if (btn) btn.remove();
+      const label = aiOverview?.querySelector(".ai-overview-label");
+      if (label) label.textContent = "AI Overview";
+    }
+    if (!isResearch && window.researchMode && aiOverview) {
       const btn = document.createElement("button");
       btn.className = "research-btn";
       btn.textContent = "Research";
@@ -334,7 +372,7 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string) {
 
   sseSource.addEventListener("error", () => {
     if (cancelled || !sseSource || sseSource.readyState === EventSource.CLOSED) return;
-    if (aiOverview) {
+    if (aiOverview && overviewCount === 0) {
       aiOverview.className = "sidebar-answer error";
       aiOverview.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>AI overview unavailable</p>';
     }
@@ -361,43 +399,17 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string) {
 window.startResearch = async function () {
   if (!window.currentResults || window.currentResults.length === 0) return;
 
-  const urls = [...new Set(window.currentResults.map(r => r.url))].slice(0, 6);
-
   const overview = document.getElementById("ai-overview");
   if (overview) {
-    overview.innerHTML = `
-      <div class="ai-overview-label">Researching...</div>
-      <p class="ai-loading">
-        <span class="spinner">${spinnerSvg}</span>
-        Scraping ${urls.length} source${urls.length > 1 ? 's' : ''}...
-      </p>`;
+    const researchBtn = overview.querySelector(".research-btn");
+    if (researchBtn) researchBtn.remove();
+    overview.querySelector(".ai-overview-label").textContent = "Researching...";
+    const spinner = document.createElement("p");
+    spinner.className = "ai-loading research-spinner";
+    spinner.innerHTML = `<span class="spinner">${spinnerSvg}</span> Analyzing sources...`;
+    overview.appendChild(spinner);
   }
 
-  try {
-    const resp = await fetch("/api/scrape", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls }),
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json();
-      if (overview) {
-        overview.innerHTML = `<div class="ai-overview-label">Research failed</div><p>${escapeHtml(err.error || 'Unknown error')}</p>
-          <button class="research-btn" onclick="window.startResearch()">Retry</button>`;
-      }
-      return;
-    }
-
-    const data = await resp.json() as { id: string; results: any[] };
-
-    const params = new URLSearchParams(window.location.search);
-    params.set("scrapedContentId", data.id);
-    initSSE(params, data.id);
-  } catch (err: any) {
-    if (overview) {
-      overview.innerHTML = `<div class="ai-overview-label">Research failed</div><p>${escapeHtml(err.message)}</p>
-        <button class="research-btn" onclick="window.startResearch()">Retry</button>`;
-    }
-  }
+  const params = new URLSearchParams(window.location.search);
+  initSSE(params, undefined, true);
 };

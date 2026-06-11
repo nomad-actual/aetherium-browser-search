@@ -8,7 +8,8 @@ export async function getAIOverview(
   results: SearXNGResult[],
   signal?: AbortSignal,
   onChunk?: (text: string, partial: string) => void,
-  customPrompt?: string
+  customPrompt?: string,
+  timeoutMs?: number
 ): Promise<LLMResponse> {
   if (!config.llmApiUrl) {
     throw new Error("LLM_API_URL is not configured");
@@ -43,7 +44,8 @@ export async function getAIOverview(
   }
 
   const apiUrl = new URL("/v1/chat/completions", config.llmApiUrl.replace(/\/+$/, "")).toString();
-  const combinedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
+  const timeout = timeoutMs ?? 30000;
+  const combinedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
   const response = await fetch(apiUrl, {
     method: "POST",
     headers,

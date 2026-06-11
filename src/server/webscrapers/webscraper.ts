@@ -12,6 +12,8 @@ function getScrapers(url: string, config: ScraperConfig): IScraper[] {
   return scrapers.filter((s) => s.shouldAttempt(url));
 }
 
+const PER_SITE_TIMEOUT_MS = 5_000;
+
 async function scrapeOne(url: string, config: ScraperConfig, signal: AbortSignal): Promise<ScrapedContent | null> {
   const scrapers = getScrapers(url, config);
 
@@ -20,15 +22,25 @@ async function scrapeOne(url: string, config: ScraperConfig, signal: AbortSignal
     return null;
   }
 
+  const perSiteController = new AbortController();
+  const perSiteTimer = setTimeout(() => perSiteController.abort(), PER_SITE_TIMEOUT_MS);
+
+  if (signal) {
+    signal.addEventListener("abort", () => { clearTimeout(perSiteTimer); perSiteController.abort(); }, { once: true });
+  }
+
+  const perSiteSignal = perSiteController.signal;
   const startTime = Date.now();
 
   for (const scraper of scrapers) {
+    if (perSiteSignal.aborted) break;
     logger.debug(`[Scraper] Attempting ${scraper.constructor.name} on ${url}`);
 
     try {
-      const content = await scraper.scrape(url, config, signal);
+      const content = await scraper.scrape(url, config, perSiteSignal);
 
       if (content) {
+        clearTimeout(perSiteTimer);
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
         logger.info(`[Scraper] Content found using ${scraper.constructor.name} (${duration}s)`);
         return content;
@@ -38,6 +50,7 @@ async function scrapeOne(url: string, config: ScraperConfig, signal: AbortSignal
     }
   }
 
+  clearTimeout(perSiteTimer);
   logger.warn(`[Scraper] No content found for ${url}`);
   return null;
 }
@@ -59,7 +72,7 @@ export async function doWebScrape(
       const url = urlQueue.shift()!;
 
       batch.push(
-        scrapeOne(url, config, signal || AbortSignal.timeout(config.timeout * 2)).then((result) => {
+        scrapeOne(url, config, signal || AbortSignal.timeout(PER_SITE_TIMEOUT_MS)).then((result) => {
           if (result) results.push(result);
         }).catch((err) => {
           logger.warn(`[Scraper] Error scraping ${url}: ${err.message}`);

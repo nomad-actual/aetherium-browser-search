@@ -37,6 +37,7 @@ export interface ScraperConfig {
   timeout: number;
   contentLimit: number;
   concurrency: number;
+  query?: string;
   reddit: {
     maxTopLevelComments: number;
     maxCommentDepth: number;
