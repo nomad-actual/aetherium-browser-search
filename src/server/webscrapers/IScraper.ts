@@ -33,11 +33,20 @@ export interface IScraper {
   scrape(url: string, config: ScraperConfig, signal: AbortSignal): Promise<ScrapedContent | null>;
 }
 
+export type ScrapeProgress = {
+  index: number;
+  total: number;
+  url: string;
+  status: "started" | "completed" | "failed";
+  title?: string;
+};
+
 export interface ScraperConfig {
   timeout: number;
   contentLimit: number;
   concurrency: number;
   query?: string;
+  onProgress?: (progress: ScrapeProgress) => void;
   reddit: {
     maxTopLevelComments: number;
     maxCommentDepth: number;

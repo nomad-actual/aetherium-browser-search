@@ -6,7 +6,7 @@ import { AppConfig } from "./config.js";
 import { getAIOverview } from "./llm.js";
 import { buildSearXNGUrl, buildAutocompleterUrl, getSearchHeaders, interpolatePrompt, interpolateResearchPrompt } from "./searxng.js";
 import { doWebScrape } from "./webscrapers/webscraper.js";
-import type { ScrapedContent, ScraperConfig } from "./webscrapers/IScraper.js";
+import type { ScrapedContent, ScraperConfig, ScrapeProgress } from "./webscrapers/IScraper.js";
 import logger from "./logger.js";
 
 function cacheKey(q: string, opts: { category?: string; engines?: string; language?: string; pageno?: string }): string {
@@ -389,6 +389,7 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
 
           // Research endpoint: scrape sources, then produce enhanced overview
           // (Phase 1 basic overview is already shown by /search/stream)
+          stream.push(`event: research-start\ndata: ${JSON.stringify({ sources: scrapeUrls.length })}\n\n`);
           const keepalive = setInterval(() => stream.push(': keepalive\n\n'), 15_000);
 
           const scraperConfig: ScraperConfig = {
@@ -396,6 +397,9 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
             contentLimit: config.scraperContentLimit,
             concurrency: config.scraperConcurrency,
             query: q.trim(),
+            onProgress: (progress: ScrapeProgress) => {
+              stream.push(`event: scrape-progress\ndata: ${JSON.stringify(progress)}\n\n`);
+            },
             reddit: {
               maxTopLevelComments: config.scraperRedditMaxComments,
               maxCommentDepth: config.scraperRedditMaxDepth,

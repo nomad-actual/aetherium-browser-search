@@ -8,6 +8,7 @@ declare global {
   interface Window {
     cancelSse: () => void;
     startResearch: () => void;
+    exitResearch: () => void;
     researchMode: boolean;
     researchMaxSources: number;
     currentQuery: string;
@@ -243,6 +244,7 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
 
   let sseSource: EventSource | null = null;
   let sseSessionId: string | null = null;
+  let cancelled = false;
 
   window.cancelSse = function () {
     cancelled = true;
@@ -253,13 +255,17 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
       sseSource.close();
       sseSource = null;
     }
-    const overview = document.getElementById("ai-overview");
-    if (overview) {
-      overview.className = "sidebar-answer";
-      overview.innerHTML = '<div class="ai-overview-label">AI Overview</div><p style="color: var(--text-muted); font-size: 13px;">Cancelled.</p>';
+    if (isResearch) {
+      exitResearchPanel();
+    } else {
+      const overview = document.getElementById("ai-overview");
+      if (overview) {
+        overview.className = "sidebar-answer";
+        overview.innerHTML = '<div class="ai-overview-label">AI Overview</div><p style="color: var(--text-muted); font-size: 13px;">Cancelled.</p>';
+      }
+      const thinking = document.getElementById("thinking-block");
+      if (thinking) thinking.style.display = "none";
     }
-    const thinking = document.getElementById("thinking-block");
-    if (thinking) thinking.style.display = "none";
   };
 
   const aiOverview = document.getElementById("ai-overview");
@@ -269,7 +275,6 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
   let incrementalRawText = "";
   let isStreaming = false;
   let scrollTarget = 0;
-  let cancelled = false;
   let overviewCount = 0;
 
   sseSource = new EventSource(url);
@@ -280,30 +285,25 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
 
   sseSource.addEventListener("incremental", (e: MessageEvent) => {
     try {
-      if (!aiOverview) return;
+      const target = isResearch
+        ? (document.getElementById("research-answer") as HTMLElement | null)
+        : aiOverview;
+      if (!target) return;
       if (!isStreaming) {
         isStreaming = true;
-        aiOverview.className = "sidebar-answer";
+        target.className = "sidebar-answer";
         if (!isResearch) {
-          aiOverview.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
-        } else {
-          // Research mode: remove research spinner + button, keep existing content
-          const spinner = aiOverview.querySelector(".research-spinner");
-          if (spinner) spinner.remove();
-          const btn = aiOverview.querySelector(".research-btn");
-          if (btn) btn.remove();
+          target.innerHTML = '<div class="ai-overview-label">AI Overview</div>';
         }
-        const container = document.createElement("p");
+        const container = document.createElement("div");
         container.className = "sidebar-answer-text";
-        container.style.cssText = "font-size:14px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px;";
-        aiOverview.appendChild(container);
+        target.appendChild(container);
         incrementalText = container;
       }
 
       if (incrementalText) {
         incrementalRawText += e.data;
-        if (!scrollTarget) scrollTarget = incrementalText.scrollHeight;
-        else incrementalText.scrollTop = scrollTarget;
+        scrollTarget = incrementalText.scrollHeight;
         incrementalText.innerHTML = markdownToHtml(incrementalRawText);
       }
     } catch (err) {
@@ -314,7 +314,17 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
   sseSource.addEventListener("thinking", (e: MessageEvent) => {
     try {
       const data = JSON.parse(e.data);
-      if (thinkingBlock) {
+      if (isResearch) {
+        const researchPanel = document.getElementById("research-panel") as HTMLElement | null;
+        if (researchPanel) {
+          const thinkingEl = researchPanel.querySelector(".thinking-block") as HTMLElement | null;
+          if (thinkingEl) {
+            thinkingEl.style.display = "block";
+            const content = thinkingEl.querySelector(".thinking-content");
+            if (content) content.textContent = data.thinking;
+          }
+        }
+      } else if (thinkingBlock) {
         thinkingBlock.style.display = "block";
         const content = thinkingBlock.querySelector(".thinking-content");
         if (content) content.textContent = data.thinking;
@@ -324,9 +334,66 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
     }
   });
 
+  sseSource.addEventListener("research-start", (e: MessageEvent) => {
+    if (!isResearch) return;
+    try {
+      const data = JSON.parse(e.data);
+      const progressList = document.getElementById("research-progress-list");
+      if (progressList) {
+        progressList.dataset.total = String(data.sources);
+      }
+    } catch (err) {
+      console.error("SSE research-start parse error:", err);
+    }
+  });
+
+  sseSource.addEventListener("scrape-progress", (e: MessageEvent) => {
+    if (!isResearch) return;
+    try {
+      const data = JSON.parse(e.data);
+      const progressList = document.getElementById("research-progress-list");
+      const progressStatus = document.getElementById("research-status");
+      if (!progressList) return;
+
+      const total = parseInt(progressList.dataset.total || "0");
+      const item = document.querySelector(`.research-source[data-url="${escapeHtml(data.url)}"]`);
+      if (item) {
+        if (data.status === "started") {
+          item.classList.add("scraping");
+        } else if (data.status === "completed") {
+          item.classList.remove("scraping");
+          item.classList.add("completed");
+          const titleEl = item.querySelector(".research-source-title");
+          if (titleEl && data.title) titleEl.textContent = data.title;
+        } else {
+          item.classList.remove("scraping");
+          item.classList.add("failed");
+        }
+      }
+      if (progressStatus) {
+        const completed = progressList.querySelectorAll(".research-source.completed, .research-source.failed").length;
+        progressStatus.textContent = `Scraping ${completed} of ${total} sources`;
+        const fill = document.getElementById("research-progress-fill");
+        if (fill && total > 0) {
+          fill.style.width = `${(completed / total) * 100}%`;
+        }
+      }
+    } catch (err) {
+      console.error("SSE scrape-progress parse error:", err);
+    }
+  });
+
   sseSource.addEventListener("research-update", () => {
-    if (!isResearch || !aiOverview) return;
-    const thinking = document.getElementById("thinking-block");
+    if (!isResearch) return;
+    const progressSection = document.getElementById("research-progress-section");
+    if (progressSection) {
+      progressSection.classList.add("done");
+    }
+    const answer = document.getElementById("research-answer");
+    if (answer) {
+      answer.style.display = "block";
+    }
+    const thinking = document.querySelector("#research-panel .thinking-block") as HTMLElement | null;
     if (thinking) {
       thinking.style.display = "none";
       const toggle = thinking.querySelector(".thinking-toggle");
@@ -334,7 +401,6 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
       const tc = thinking.querySelector(".thinking-content");
       if (tc) tc.classList.remove("open");
     }
-    aiOverview.innerHTML = '<div class="ai-overview-label">Enhancing Overview...</div>';
     isStreaming = false;
     incrementalText = null;
     incrementalRawText = "";
@@ -343,22 +409,15 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
 
   sseSource.addEventListener("overview", () => {
     overviewCount++;
-    try {
-      if (thinkingBlock) {
-        const toggle = thinkingBlock.querySelector(".thinking-toggle");
-        if (toggle) toggle.classList.remove("open");
-        const tc = thinkingBlock.querySelector(".thinking-content");
-        if (tc) tc.classList.remove("open");
-      }
-    } catch (err) {
-      console.error("SSE overview error:", err);
-    }
-    // Research complete: reset label
     if (isResearch) {
-      const btn = aiOverview?.querySelector(".research-btn");
-      if (btn) btn.remove();
-      const label = aiOverview?.querySelector(".ai-overview-label");
-      if (label) label.textContent = "AI Overview";
+      const label = document.getElementById("research-label");
+      if (label) label.textContent = "Research Complete";
+    }
+    if (thinkingBlock) {
+      const toggle = thinkingBlock.querySelector(".thinking-toggle");
+      if (toggle) toggle.classList.remove("open");
+      const tc = thinkingBlock.querySelector(".thinking-content");
+      if (tc) tc.classList.remove("open");
     }
     if (!isResearch && window.researchMode && aiOverview) {
       const btn = document.createElement("button");
@@ -372,7 +431,15 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
 
   sseSource.addEventListener("error", () => {
     if (cancelled || !sseSource || sseSource.readyState === EventSource.CLOSED) return;
-    if (aiOverview && overviewCount === 0) {
+    if (isResearch) {
+      const answer = document.getElementById("research-answer");
+      if (answer) {
+        answer.className = "sidebar-answer error";
+        answer.style.display = "block";
+        const label = document.getElementById("research-label");
+        if (label) label.textContent = "Research Failed";
+      }
+    } else if (aiOverview && overviewCount === 0) {
       aiOverview.className = "sidebar-answer error";
       aiOverview.innerHTML = '<div class="ai-overview-label">AI Overview unavailable</div><p>AI overview unavailable</p>';
     }
@@ -396,6 +463,80 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
   });
 }
 
+function buildResearchPanel(results: SearXNGResult[]) {
+  const sourceItems = results.slice(0, window.researchMaxSources || 6).map((r, i) => {
+    const host = r.parsed_url ? r.parsed_url.join(" \u203A ") : r.url;
+    return `
+      <div class="research-source" data-url="${escapeHtml(r.url)}" data-index="${i}">
+        <span class="research-source-icon"></span>
+        <span class="research-source-title">${escapeHtml(host)}</span>
+        <span class="research-source-status"></span>
+      </div>`;
+  }).join("");
+
+  return `
+    <div class="research-panel" id="research-panel">
+      <div class="research-panel-inner">
+        <div class="research-panel-header">
+          <div class="research-panel-title">
+            <span class="research-panel-icon"></span>
+            <span id="research-label">Research Mode</span>
+          </div>
+          <button class="research-exit-btn" onclick="window.exitResearch()" title="Exit research mode">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div id="research-progress-section" class="research-progress-section">
+          <div class="research-progress-header">
+            <span class="spinner">${spinnerSvg}</span>
+            <span id="research-status">Preparing sources...</span>
+          </div>
+          <div class="research-progress-bar" id="research-progress-bar">
+            <div class="research-progress-fill" id="research-progress-fill"></div>
+          </div>
+          <div class="research-progress-list" id="research-progress-list" data-total="0">
+            ${sourceItems}
+          </div>
+        </div>
+        <div id="thinking-block-research" class="thinking-block" style="display: none;">
+          <button class="thinking-toggle" onclick="this.classList.toggle('open'); this.nextElementSibling?.classList.toggle('open');">
+            <span class="thinking-toggle-label">Thinking</span>
+          </button>
+          <div class="thinking-content"></div>
+        </div>
+        <div class="sidebar-answer" id="research-answer" style="display: none;">
+        </div>
+      </div>
+    </div>`;
+}
+
+function exitResearchPanel() {
+  const panel = document.getElementById("research-panel");
+  if (!panel) return;
+  panel.classList.add("exiting");
+  const layout = document.querySelector(".content-layout") as HTMLElement | null;
+  const sidebar = document.querySelector(".content-sidebar") as HTMLElement | null;
+  const main = document.querySelector(".content-main") as HTMLElement | null;
+  if (sidebar) sidebar.style.display = "";
+  if (main) main.style.display = "";
+  if (layout) layout.classList.remove("research-active");
+  setTimeout(() => {
+    panel.remove();
+    const overview = document.getElementById("ai-overview");
+    if (overview) {
+      const btn = document.createElement("button");
+      btn.className = "research-btn";
+      btn.textContent = "Research";
+      btn.onclick = window.startResearch;
+      const existing = overview.querySelector(".research-btn");
+      if (existing) existing.remove();
+      overview.appendChild(btn);
+    }
+  }, 400);
+}
+
+window.exitResearch = exitResearchPanel;
+
 window.startResearch = async function () {
   if (!window.currentResults || window.currentResults.length === 0) return;
 
@@ -403,12 +544,24 @@ window.startResearch = async function () {
   if (overview) {
     const researchBtn = overview.querySelector(".research-btn");
     if (researchBtn) researchBtn.remove();
-    overview.querySelector(".ai-overview-label").textContent = "Researching...";
-    const spinner = document.createElement("p");
-    spinner.className = "ai-loading research-spinner";
-    spinner.innerHTML = `<span class="spinner">${spinnerSvg}</span> Analyzing sources...`;
-    overview.appendChild(spinner);
   }
+
+  const layout = document.querySelector(".content-layout") as HTMLElement | null;
+  const sidebar = document.querySelector(".content-sidebar") as HTMLElement | null;
+  const main = document.querySelector(".content-main") as HTMLElement | null;
+
+  document.body.insertAdjacentHTML("beforeend", buildResearchPanel(window.currentResults));
+
+  requestAnimationFrame(() => {
+    if (layout) layout.classList.add("research-active");
+    const panel = document.getElementById("research-panel");
+    if (panel) panel.classList.add("entering");
+    if (sidebar) sidebar.style.display = "none";
+    if (main) {
+      main.style.display = "block";
+      main.style.opacity = "1";
+    }
+  });
 
   const params = new URLSearchParams(window.location.search);
   initSSE(params, undefined, true);

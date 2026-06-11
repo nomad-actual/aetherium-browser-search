@@ -1,7 +1,7 @@
 import logger from "../logger.js";
 import BasicHtmlScraper from "./BasicHtmlScraper.js";
 import PlaywrightScraper from "./PlaywrightScraper.js";
-import type { ScrapedContent, IScraper, ScraperConfig } from "./IScraper.js";
+import type { ScrapedContent, IScraper, ScraperConfig, ScrapeProgress } from "./IScraper.js";
 
 function getScrapers(url: string, config: ScraperConfig): IScraper[] {
   const scrapers: IScraper[] = [];
@@ -62,20 +62,42 @@ export async function doWebScrape(
 ): Promise<ScrapedContent[]> {
   const concurrency = config.concurrency || 3;
   const results: ScrapedContent[] = [];
+  const total = urls.length;
+  const onProgress = config.onProgress;
 
   const urlQueue = [...urls];
+  let completed = 0;
 
   while (urlQueue.length > 0) {
     const batch: Promise<void>[] = [];
 
     for (let i = 0; i < Math.min(concurrency, urlQueue.length); i++) {
       const url = urlQueue.shift()!;
+      const idx = total - urlQueue.length;
+
+      if (onProgress) {
+        onProgress({ index: idx, total, url, status: "started" });
+      }
 
       batch.push(
         scrapeOne(url, config, signal || AbortSignal.timeout(PER_SITE_TIMEOUT_MS)).then((result) => {
           if (result) results.push(result);
+          completed++;
+          if (onProgress) {
+            onProgress({
+              index: idx,
+              total,
+              url,
+              status: result ? "completed" : "failed",
+              title: result?.title,
+            });
+          }
         }).catch((err) => {
           logger.warn(`[Scraper] Error scraping ${url}: ${err.message}`);
+          completed++;
+          if (onProgress) {
+            onProgress({ index: idx, total, url, status: "failed" });
+          }
         })
       );
     }
