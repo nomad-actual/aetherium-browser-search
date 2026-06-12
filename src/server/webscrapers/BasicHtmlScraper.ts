@@ -48,6 +48,8 @@ export default class BasicHtmlScraper {
       return null;
     }
 
+    if (controller.signal.aborted) return null;
+
     const htmlText = await response.text();
 
     const dom = new JSDOM(htmlText, {
@@ -158,12 +160,11 @@ function trimInPlace(doc: Document): void {
     node = walker.nextNode() as Element | null;
   }
 
-  for (const el of toRemove) {
-    el.remove();
-  }
-
   if (toRemove.length > 0) {
     const initial = doc.body?.querySelectorAll('*').length || 0;
+    for (const el of toRemove) {
+      el.remove();
+    }
     const final = doc.body?.querySelectorAll('*').length || 0;
     logger.debug(`[BasicHtmlScraper] Trimmed ${toRemove.length} elements (${initial} → ${final} nodes)`);
   }

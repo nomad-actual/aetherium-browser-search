@@ -57,48 +57,54 @@ export async function doWebScrape(
   const results: ScrapedContent[] = [];
   const total = urls.length;
   const onProgress = config.onProgress;
-
-  const urlQueue = [...urls];
   let completed = 0;
 
-  while (urlQueue.length > 0) {
-    const batch: Promise<void>[] = [];
-
-    for (let i = 0; i < Math.min(concurrency, urlQueue.length); i++) {
-      const url = urlQueue.shift()!;
-      const idx = total - urlQueue.length;
-
-      if (onProgress) {
-        onProgress({ index: idx, total, url, status: "started" });
-      }
-
-      batch.push(
-        scrapeOne(url, config, signal || AbortSignal.timeout(PER_SITE_TIMEOUT_MS)).then((result) => {
-          if (result) results.push(result);
-          completed++;
-          if (onProgress) {
-            onProgress({
-              index: idx,
-              total,
-              url,
-              status: result ? "completed" : "failed",
-              title: result?.title,
-            });
-          }
-        }).catch((err) => {
-          logger.warn(`[Scraper] Error scraping ${url}: ${err.message}`);
-          completed++;
-          if (onProgress) {
-            onProgress({ index: idx, total, url, status: "failed" });
-          }
-        })
-      );
+  async function processUrl(url: string, idx: number): Promise<void> {
+    if (onProgress) {
+      onProgress({ index: idx, total, url, status: "started" });
     }
 
-    await Promise.all(batch);
-
-    if (signal?.aborted) break;
+    try {
+      const result = await scrapeOne(url, config, signal || AbortSignal.timeout(PER_SITE_TIMEOUT_MS));
+      if (result) results.push(result);
+      completed++;
+      if (onProgress) {
+        onProgress({
+          index: idx,
+          total,
+          completed,
+          url,
+          status: result ? "completed" : "failed",
+          title: result?.title,
+        });
+      }
+    } catch (err: any) {
+      completed++;
+      logger.warn(`[Scraper] Error scraping ${url}: ${err.message}`);
+      if (onProgress) {
+        onProgress({ index: idx, total, completed, url, status: "failed" });
+      }
+    }
   }
 
+  // Build all task promises, but only kick off `concurrency` at a time.
+  // Each task, when done, triggers the next queued task.
+  const allPromises: Promise<void>[] = [];
+
+  for (let i = 0; i < total; i++) {
+    if (signal?.aborted) break;
+
+    const url = urls[i];
+    const idx = i + 1;
+
+    // For tasks beyond concurrency, chain off the promise that started
+    // `concurrency` positions earlier — it will have finished by then.
+    const prevPromise = i >= concurrency ? allPromises[i - concurrency] : Promise.resolve();
+
+    const task = prevPromise.then(() => processUrl(url, idx));
+    allPromises.push(task);
+  }
+
+  await Promise.all(allPromises);
   return results;
 }

@@ -223,16 +223,13 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
          let customPrompt: string | undefined;
             if (scrapedContentId) {
               const scraped = scrapedContentStore.get(scrapedContentId);
-              if (scraped && scraped.length > 0) {
-                const scrapedText = scraped
-                  .map(s => `Source: ${s.title}\nURL: ${s.metadata.url}\nContent:\n${s.content}`)
-                  .join("\n\n---\n\n");
 
+              if (scraped && scraped.length > 0) {
                 customPrompt = interpolateResearchPrompt(
                   config.researchPrompt,
                   q.trim(),
                   results,
-                  scrapedText
+                  scraped
                 );
               }
             }
@@ -422,15 +419,11 @@ export function buildRoutes(app: FastifyInstance, config: AppConfig, shutdownSig
           if (scraped.length > 0 && !controller.signal.aborted) {
             stream.push(`event: research-update\ndata: {}\n\n`);
 
-            const scrapedText = scraped
-              .map(s => `Source: ${s.title}\nURL: ${s.metadata.url}\nContent:\n${s.content}`)
-              .join("\n\n---\n\n");
-
             const customPrompt = interpolateResearchPrompt(
               config.researchPrompt,
               q.trim(),
               results,
-              scrapedText
+              scraped
             );
 
             const ai2 = await getAIOverview(

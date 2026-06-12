@@ -1,5 +1,6 @@
 import { AppConfig } from "./config.js";
 import { SearXNGResult } from "../shared/types.js";
+import { ScrapedContent } from "./webscrapers/IScraper.js";
 
 export function buildSearXNGUrl(config: AppConfig, q: string, opts: {
   category?: string;
@@ -53,7 +54,6 @@ export function interpolatePrompt(
   results: SearXNGResult[]
 ): string {
   const resultsText = results
-    .slice(0, 10)
     .map(
       (r, i) =>
         `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.content || "No snippet available"}`
@@ -68,17 +68,20 @@ export function interpolateResearchPrompt(
   prompt: string,
   query: string,
   results: SearXNGResult[],
-  scrapedText: string
+  scrapedContents: ScrapedContent[]
 ): string {
   const resultsText = results
-    .slice(0, 10)
-    .map(
-      (r, i) =>
-        `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.content || "No snippet available"}`
-    )
+    .map((r, i) => `${i + 1}. ${r.title}\n   URL: ${r.url}`)
     .join("\n\n");
-  return prompt
-    .replace(/{{query}}/g, query)
-    .replace(/{{results}}/g, resultsText)
-    .replace(/{{scrapedContent}}/g, scrapedText);
+
+  const scrapedText = scrapedContents
+    .map(s => `Source: ${s.title}\nURL: ${s.metadata.url}\nContent:\n${s.content}`)
+    .join("\n\n---\n\n");
+
+  const finalPrompt = prompt
+    .replace('{{query}}', query)
+    .replace('{{results}}', resultsText)
+    .replace('{{scrapedContent}}', scrapedText);
+
+  return finalPrompt
 }

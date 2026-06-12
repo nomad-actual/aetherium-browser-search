@@ -355,7 +355,8 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
       const progressStatus = document.getElementById("research-status");
       if (!progressList) return;
 
-      const total = parseInt(progressList.dataset.total || "0");
+      const total = data.total || parseInt(progressList.dataset.total || "0");
+      const completed = data.completed || progressList.querySelectorAll(".research-source.completed, .research-source.failed").length;
       const item = document.querySelector(`.research-source[data-url="${escapeHtml(data.url)}"]`);
       if (item) {
         if (data.status === "started") {
@@ -371,7 +372,6 @@ export function initSSE(urlParams: URLSearchParams, scrapedContentId?: string, i
         }
       }
       if (progressStatus) {
-        const completed = progressList.querySelectorAll(".research-source.completed, .research-source.failed").length;
         progressStatus.textContent = `Scraping ${completed} of ${total} sources`;
         const fill = document.getElementById("research-progress-fill");
         if (fill && total > 0) {

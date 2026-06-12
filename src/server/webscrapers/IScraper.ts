@@ -1,4 +1,4 @@
-export type CommentScore = {
+type CommentScore = {
   ups: number;
   downs: number;
   score: number;
@@ -13,7 +13,7 @@ export type ScrapedComment = {
   replies?: ScrapedComment[];
 }
 
-export type ScrapedMetadata = {
+type ScrapedMetadata = {
   url: string;
   author?: string;
   datePublished?: string;
@@ -36,6 +36,7 @@ export interface IScraper {
 export type ScrapeProgress = {
   index: number;
   total: number;
+  completed?: number;
   url: string;
   status: "started" | "completed" | "failed";
   title?: string;

@@ -49,12 +49,10 @@ export default class PlaywrightScraper {
     let page: Page | null = null;
 
     const navTimeout = config.playwright?.timeoutMs ?? 15_000;
-    const timeoutController = new AbortController();
-    const timer = setTimeout(() => timeoutController.abort(), navTimeout);
 
     signal.addEventListener("abort", () => {
-      clearTimeout(timer);
-      timeoutController.abort();
+      if (page) page.close().catch(() => {});
+      if (context) context.close().catch(() => {});
     }, { once: true });
 
     try {
@@ -73,7 +71,7 @@ export default class PlaywrightScraper {
 
       const response = await page.goto(url, {
         waitUntil: "domcontentloaded",
-        timeout: Math.min(navTimeout, 30_000),
+        timeout: navTimeout,
       }).catch(() => null);
 
       if (!response) {
@@ -93,7 +91,11 @@ export default class PlaywrightScraper {
       }
 
       const idleStart = Date.now();
-      await page.waitForLoadState("networkidle").catch(() => {});
+      const idleTimeout = Math.max(3_000, navTimeout - (Date.now() - navStart));
+      await Promise.race([
+        page.waitForLoadState("networkidle").catch(() => {}),
+        new Promise(r => setTimeout(r, idleTimeout)),
+      ]);
       logger.info(`[PlaywrightScraper] networkidle after ${Date.now() - idleStart}ms: ${url}`);
 
       if (signal.aborted) return null;
@@ -124,7 +126,6 @@ export default class PlaywrightScraper {
       logger.error(`[PlaywrightScraper] Error: ${url}: ${err.message}`);
       return null;
     } finally {
-      clearTimeout(timer);
       if (page) {
         await page.close().catch(() => {});
       }
